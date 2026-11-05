@@ -1,0 +1,445 @@
+---
+title: "IC10-2-1 — Data Preparation with Case 31"
+subtitle: "Employees Federal Credit Union"
+author: "Han Mai"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-fold: show
+    embed-resources: true
+    theme: cosmo
+execute:
+  message: false
+  warning: false
+---
+
+# Case context {.unnumbered}
+
+The Employees Federal Credit Union (EFCU) had surplus funds and a lower loan-to-share ratio than similar credit unions. The board wanted to understand why members borrowed elsewhere, what they knew about EFCU services, and how they viewed employees and operations. The case describes a mailed questionnaire sent to a simple random sample of 300 from a list of 3,531 members. It reports 125 returns and two exclusions, one incomplete and one apparently falsified. I prepared the supplied course file as delivered. It contains more rows than the narrative's 123 usable returns, and there is no respondent ID or fieldwork log in this file to reconcile the difference.
+
+I used the [Case 31 narrative and questionnaire](https://github.com/jaejungca/case31/blob/main/Case%2031%20-%20Employees%20Federal%20Credit%20Union.PDF), especially Exhibits 31.1 and 31.2, with [Professor Jung’s assignment instructions](https://jaejungca.github.io/case31/IC-M08-Data-Preparation-Case-31-R.html) and [demonstration](https://streaming.cpp.edu/media/t/1_m4l26cpl). The instructor’s public SPSS file is included for reproducibility under the [source repository’s CC BY 4.0 attribution](https://github.com/jaejungca/case31#readme). When the Canvas download is present locally, the report uses it and checks that both imports agree. To render in a fresh R environment, install `tidyverse`, `haven`, `labelled`, `skimr`, `psych`, and `knitr`. The optional interactive dictionary uses `sjPlot`.
+
+# Import and inspect the SPSS data
+
+```{r}
+#| label: import
+library(tidyverse)
+library(haven)
+library(labelled)
+
+public_path <- "data/Case 31 Data_efcu_1.sav"
+canvas_path <- "data/canvas/Case 31 Data_efcu_1.sav"
+raw_path <- if (file.exists(canvas_path)) canvas_path else public_path
+raw_hash <- tools::md5sum(raw_path)
+data_raw <- read_sav(raw_path)
+if (file.exists(canvas_path)) {
+  stopifnot(identical(data_raw, read_sav(public_path)))
+}
+
+dim(data_raw)
+names(data_raw)
+glimpse(data_raw)
+```
+
+```{r}
+#| label: import-summaries
+#| code-fold: true
+skimr::skim(data_raw)
+summary(data_raw)
+```
+
+```{r}
+#| label: missing-raw
+missing_raw <- data_raw |>
+  summarise(across(everything(), ~ sum(is.na(.x)))) |>
+  pivot_longer(everything(), names_to = "Variable", values_to = "Missing") |>
+  filter(Missing > 0)
+knitr::kable(missing_raw)
+```
+
+**Import questions**
+
+1. I imported **`r nrow(data_raw)` rows and `r ncol(data_raw)` columns**. A row is a record in the supplied survey file.
+2. The names are printed above. The question fields present are q3–q27, q30–q34, q37 and q38.
+3. `OverallEmployeePerformace` and `employeeperformance` are the two fields that look like calculated employee scores.
+4. A variable label says what the entire column measures. A value label translates a particular code within that column, such as 1 meaning “Yes” in q11.
+5. The only columns with missing values at import are `r paste(paste0(missing_raw$Variable, " (", missing_raw$Missing, ")"), collapse = ", ")`.
+
+# Create a data dictionary
+
+```{r}
+#| label: dictionary
+make_dictionary <- function(dataset) {
+  tibble(
+    Variable = names(dataset),
+    Label = map_chr(dataset, ~ attr(.x, "label") %||% ""),
+    Class = map_chr(dataset, ~ class(.x)[1]),
+    Distinct = map_int(dataset, ~ n_distinct(.x, na.rm = TRUE)),
+    Codes = map_chr(dataset, function(x) {
+      labels <- val_labels(x)
+      paste(paste0(unname(labels), " = ", names(labels)), collapse = ", ")
+    })
+  )
+}
+data_dictionary <- make_dictionary(data_raw)
+knitr::kable(data_dictionary)
+```
+
+Distinct counts include substantive and special codes that actually occur and exclude ordinary missing values. In the R console, `sjPlot::view_df(data_raw)` gives an interactive view of the same metadata.
+
+**Dictionary questions**
+
+1. The employee items identify the traits they ask about, and q9 and q10 identify statement frequency and accuracy. Several service names, such as q18 signature loans and q19 new car loans, are already easy to match to the questionnaire.
+2. I would revise q8 first. It repeats q9’s frequency label even though it asks about interest charged on borrowing. I also clarified labels such as q37’s “overall rating” and q38’s “headquarter” to specify what respondents rated or where they live.
+3. Q38 is nominal because the codes identify headquarters-area residence categories. Q10 is ordinal because excellent through poor have an order, with unknown distances between ratings. The q3–q6 agreement items are also ordered. For the assignment’s reliability and factor checks, I treat their 1–5 steps as approximately equal and use the same assumption if I report their mean. That mean has no natural zero, so a 4 does not represent twice as much proficiency as a 2.
+4. Labels are especially important for identifying awareness versus use, “No answer,” “No opinion,” and the direction of the ratings. The agreement endpoints make the direction predictable, but the labels for codes 2–4 still matter because they identify disagreement, uncertainty and agreement.
+
+# Improve the metadata with the case coding instructions
+
+```{r}
+#| label: metadata-check
+agreement <- c(paste0("q", 3:6), paste0("q", 30:34))
+awareness <- paste0("q", 13:26)
+yes_no <- c("q11", "q12", "q27", "q38")
+expected_extra <- c(
+  set_names(rep(list(2:4), length(agreement)), agreement),
+  set_names(rep(list(3), length(awareness)), awareness),
+  set_names(rep(list(3), length(yes_no)), yes_no)
+)
+label_gaps <- imap_dfr(expected_extra, function(codes, variable) {
+  missing_labels <- setdiff(codes, unname(val_labels(data_raw[[variable]])))
+  tibble(
+    Variable = variable,
+    Code = missing_labels,
+    Observed = map_int(missing_labels, ~ sum(data_raw[[variable]] == .x, na.rm = TRUE))
+  )
+})
+knitr::kable(label_gaps)
+```
+
+**Which codes lack labels?** The agreement items lack labels for 2, 3 and 4. The service items lack “Unaware” for 3, and the yes/no items lack “No answer” for 3. The table distinguishes a missing label from a response code that did not occur. Q37 has a label for 6 already. The questionnaire calls the option “No opinion,” while the coding exhibit calls code 6 “No answer” for that response scale. I used the exhibit's wording for the raw-direction analysis label and handled it as non-substantive either way.
+
+```{r}
+#| label: label-demo
+var_label(data_raw$q7)
+val_labels(data_raw$q7)
+val_labels(add_value_labels(data_raw$q7, "Refused" = 7))
+var_label(remove_var_label(data_raw$q7))
+```
+
+The example label “Refused” is a temporary demonstration. Code 7 is outside q7’s coding scheme.
+
+```{r}
+#| label: add-labels
+agreement_labels <- c(
+  "Strongly disagree" = 1, "Disagree" = 2, "Uncertain" = 3,
+  "Agree" = 4, "Strongly agree" = 5
+)
+rate_labels <- c(
+  "Very high" = 1, "High" = 2, "Average" = 3, "Low" = 4,
+  "Very low" = 5, "No opinion" = 6
+)
+rating_labels <- c(
+  "Excellent" = 1, "Good" = 2, "Average" = 3, "Poor" = 4,
+  "Very poor" = 5, "No answer" = 6
+)
+data_labelled <- data_raw |>
+  mutate(
+    across(all_of(agreement), ~ set_value_labels(.x, labels = agreement_labels)),
+    across(all_of(awareness), ~ add_value_labels(.x, "Unaware" = 3)),
+    across(all_of(yes_no), ~ set_value_labels(.x, labels = c("Yes" = 1, "No" = 2, "No answer" = 3))),
+    across(c(q7, q8), ~ set_value_labels(.x, labels = rate_labels)),
+    q37 = set_value_labels(q37, labels = rating_labels)
+  ) |>
+  set_variable_labels(
+    q6 = "Credit union employees are always available",
+    q7 = "Perceived rates paid on credit union share accounts",
+    q8 = "Perceived rates charged to members for borrowing",
+    q9 = "Frequency of receiving account statements",
+    q10 = "Accuracy of account statements",
+    q11 = "Account statements are easy to understand",
+    q12 = "Credit union keeps account information confidential",
+    q17 = "MasterCard credit cards",
+    q22 = "Household goods and appliance loans",
+    q30 = "Credit union loan rates are lower than competitors’ rates",
+    q31 = "Credit union personnel keep personal financial information confidential",
+    q32 = "Credit union processes loan applications promptly",
+    q33 = "Current financial services meet members’ needs",
+    q34 = "Loan applications are simple to complete",
+    q37 = "Overall rating of credit union management and operations",
+    q38 = "Lives in the headquarters area",
+    OverallEmployeePerformace = "Precomputed employee score, calculation undocumented",
+    employeeperformance = "Precomputed employee score, calculation undocumented"
+  )
+
+knitr::kable(
+  make_dictionary(data_labelled) |>
+    filter(Variable %in% c("q3", "q8", "q12", "q13", "q26", "q37"))
+)
+```
+
+**How should q8 be relabeled?** “Perceived rates charged to members for borrowing” matches q8’s wording. Q7 is about what the credit union pays on savings, and q9 asks how often statements arrive.
+
+# Create an analysis copy
+
+```{r}
+#| label: analysis-copy
+data <- data_labelled |> select(matches("^q[0-9]+$"))
+setdiff(names(data_labelled), names(data))
+```
+
+**Why exclude the precomputed indexes?** Their calculation and missing-data rules are undocumented. The point of checking the items is to decide whether a score is justified and make the calculation reproducible. I kept the old fields available in the raw data for reference and used only the `q` fields as inputs.
+
+## Data-quality checks
+
+```{r}
+#| label: quality-checks
+expected_codes <- c(
+  set_names(rep(list(1:5), length(agreement)), agreement),
+  set_names(rep(list(1:3), length(awareness)), awareness),
+  set_names(rep(list(1:3), length(yes_no)), yes_no),
+  list(q7 = 1:6, q8 = 1:6, q9 = 1:5, q10 = 1:4, q37 = 1:6)
+)
+stopifnot(setequal(names(expected_codes), names(data)))
+quality <- imap_dfr(data, function(x, variable) {
+  values <- sort(unique(as.numeric(x)))
+  tibble(
+    Variable = variable,
+    Observed = paste(values, collapse = ", "),
+    Missing = sum(is.na(x)),
+    `Missing %` = round(mean(is.na(x)) * 100, 1),
+    `Undefined codes` = paste(setdiff(values, expected_codes[[variable]]), collapse = ", ")
+  )
+})
+knitr::kable(quality)
+stopifnot(all(quality$`Undefined codes` == ""))
+```
+
+**Any values outside the questionnaire coding?** The observed values all fall within the ranges in Exhibit 31.2. The 3 in q12 is a defined nonanswer. The 3 in the service questions means the respondent was unaware of the service. It is a usable category there.
+
+# Recode special responses and reverse-code items
+
+## Separate missing responses from valid responses
+
+```{r}
+#| label: special-responses
+special_codes <- c(q7 = 6, q8 = 6, q37 = 6, set_names(rep(3, length(yes_no)), yes_no))
+raw_with_spss_missing <- read_sav(raw_path, user_na = TRUE)
+before <- map2_dfr(names(special_codes), special_codes, function(variable, code) {
+  x <- raw_with_spss_missing[[variable]]
+  tibble(
+    Variable = variable, Code = code,
+    `Stored special code` = sum(as.numeric(x) == code, na.rm = TRUE),
+    `Special before` = sum(data[[variable]] == code, na.rm = TRUE),
+    `NA before` = sum(is.na(data[[variable]]))
+  )
+})
+
+data <- data |>
+  mutate(across(all_of(names(special_codes)), ~ na_if(.x, special_codes[[cur_column()]])))
+
+special_audit <- before |>
+  mutate(
+    `Special after` = map2_int(Variable, Code, ~ sum(data[[.x]] == .y, na.rm = TRUE)),
+    `NA after` = map_int(Variable, ~ sum(is.na(data[[.x]])))
+  )
+knitr::kable(special_audit)
+stopifnot(
+  all(special_audit$`Special after` == 0),
+  all(special_audit$`NA after` == special_audit$`NA before` + special_audit$`Special before`)
+)
+```
+
+Neither import shows a stored 6 for q7, q8 or q37, even when I retain SPSS user-missing codes. I cannot tell from the file whether the existing blanks originally represented nonresponses or explicit “No opinion” answers. Q12 contains `r special_audit[["Special before"]][special_audit$Variable == "q12"]` coded nonanswers, which became `NA`. I retained the special-code labels so the dictionary still documents the questionnaire’s coding.
+
+## Reverse-code the rating items
+
+```{r}
+#| label: reverse-code
+higher_rate <- c("Very low" = 1, "Low" = 2, "Average" = 3, "High" = 4, "Very high" = 5)
+data <- data |>
+  mutate(
+    q7r = 6 - as.numeric(q7),
+    q8r = 6 - as.numeric(q8),
+    q10r = 5 - as.numeric(q10),
+    q37r = 6 - as.numeric(q37)
+  ) |>
+  set_variable_labels(
+    q7r = "Perceived savings rates, higher score means higher rates",
+    q8r = "Perceived borrowing rates, higher score means higher rates",
+    q10r = "Statement accuracy, higher score means better accuracy",
+    q37r = "Overall management and operations rating, higher score means better rating"
+  ) |>
+  set_value_labels(
+    q7r = higher_rate,
+    q8r = higher_rate,
+    q10r = c("Poor" = 1, "Fair" = 2, "Good" = 3, "Excellent" = 4),
+    q37r = c("Very poor" = 1, "Poor" = 2, "Average" = 3, "Good" = 4, "Excellent" = 5)
+  )
+```
+
+I used minimum plus maximum minus the original response. The reversal makes higher numbers mean higher rates for q7r and q8r. Members might welcome a higher savings rate and dislike a higher borrowing rate, so the two questions have different business interpretations. Higher q10r and q37r values indicate more favorable ratings.
+
+**Why leave q9 and the awareness items in their original coding?**
+
+1. For q9, “About right” is code 3, between excessive and insufficient frequency. Reversing the endpoints would still leave the best response in the middle. To answer whether the frequency was about right, I could use `if_else(as.numeric(data$q9) == 3, 1L, 0L)` and preserve missing values.
+2. Q13–q26 distinguish awareness and use for each product. An average would assume equal spacing between the categories and treat use of very different services as interchangeable. I would show counts or percentages for all three categories by service, or report awareness and use separately.
+
+## Awareness items as an ordinal exercise
+
+```{r}
+#| label: awareness-exercise
+awareness_ordinal <- data |>
+  transmute(across(all_of(awareness), ~ labelled(
+    4 - as.numeric(.x),
+    labels = c("Unaware" = 1, "Aware but have not used" = 2, "Aware and have used" = 3),
+    label = paste(var_label(.x), "(ordinal exercise)")
+  ), .names = "{.col}r"))
+
+awareness_counts <- map_dfr(awareness, function(variable) {
+  original <- as.numeric(data[[variable]])
+  reversed <- as.numeric(awareness_ordinal[[paste0(variable, "r")]])
+  stopifnot(identical(reversed, 4 - original))
+  tibble(Variable = variable, Original = original, Reversed = reversed) |>
+    count(Variable, Original, Reversed, name = "Records")
+})
+knitr::kable(awareness_counts)
+```
+
+This exercise assumes a progression from unaware to aware to used. I kept these alternative encodings in a separate object. The analysis file keeps the original service variables and their category labels.
+
+## Verify the rating reversals
+
+```{r}
+#| label: verify-recode
+reversal_max <- c(q7 = 5, q8 = 5, q10 = 4, q37 = 5)
+reversal_counts <- imap_dfr(reversal_max, function(maximum, variable) {
+  original <- as.numeric(data[[variable]])
+  reversed <- as.numeric(data[[paste0(variable, "r")]])
+  stopifnot(identical(reversed, 1 + maximum - original))
+  tibble(Variable = variable, Original = original, Reversed = reversed) |>
+    count(Variable, Original, Reversed, name = "Records")
+})
+knitr::kable(reversal_counts)
+```
+
+I checked each original and reversed pair, including missing values. On the 1–5 scales, 1 maps to 5, 2 to 4 and 3 stays 3. On q10’s 1–4 scale, 1 and 4 swap, and 2 and 3 swap. The input had no q7 responses at 1, so its 1-to-5 mapping has no observed row to display.
+
+# Evaluate candidate multi-item measures
+
+```{r}
+#| label: measure-diagnostics
+employee_items <- data |> select(q3:q6) |> remove_val_labels() |> remove_var_label()
+operations_items <- data |> select(q30:q34) |> remove_val_labels() |> remove_var_label()
+
+employee_alpha <- psych::alpha(employee_items)
+operations_alpha <- psych::alpha(operations_items)
+employee_fa <- psych::fa(employee_items, nfactors = 1, rotate = "none", fm = "minres")
+operations_fa <- psych::fa(operations_items, nfactors = 1, rotate = "none", fm = "minres")
+
+diagnostics <- function(alpha, factor) {
+  tibble(
+    Item = rownames(alpha$item.stats),
+    `Corrected item-total (r.drop)` = alpha$item.stats$r.drop,
+    `Raw alpha if dropped` = alpha$alpha.drop$raw_alpha,
+    Loading = as.numeric(factor$loadings[, 1]),
+    Communality = unname(factor$communality)
+  )
+}
+employee_results <- diagnostics(employee_alpha, employee_fa)
+operations_results <- diagnostics(operations_alpha, operations_fa)
+measure_summary <- tibble(
+  Measure = c("Employee proficiency", "Operational effectiveness"),
+  `Complete records` = c(sum(complete.cases(employee_items)), sum(complete.cases(operations_items))),
+  `Raw alpha` = c(employee_alpha$total$raw_alpha, operations_alpha$total$raw_alpha),
+  `Variance explained (%)` = 100 * c(employee_fa$Vaccounted["Proportion Var", 1],
+                                     operations_fa$Vaccounted["Proportion Var", 1])
+)
+knitr::kable(measure_summary, digits = 3)
+```
+
+## Employee proficiency
+
+```{r}
+#| label: employee-output
+knitr::kable(employee_results, digits = 3)
+```
+
+**Answers.** Raw alpha is **`r sprintf("%.3f", employee_alpha$total$raw_alpha)`**, above the 0.70 guideline discussed in class. All corrected item-total correlations are positive. Q4, helpfulness, contributes the most by both diagnostics. Dropping it lowers alpha to `r sprintf("%.3f", employee_alpha$alpha.drop["q4", "raw_alpha"])`, and dropping any other item also lowers alpha. All four loadings exceed 0.70, and the one-factor solution accounts for **`r sprintf("%.1f%%", measure_summary[["Variance explained (%)"]][1])`** of item variance. Courtesy, helpfulness, professionalism and availability are different ways members experience employee service. I would average them for this assignment. The one-factor check gives preliminary support for using a common score.
+
+## Operational effectiveness
+
+```{r}
+#| label: operations-output
+knitr::kable(operations_results, digits = 3)
+```
+
+**Answers.** Raw alpha is **`r sprintf("%.3f", operations_alpha$total$raw_alpha)`**, below 0.70. The corrected item-total correlations are positive but weaker, especially for q33 and q34. Dropping any one item fails to improve alpha. The wording of all five items points in the same agreement direction, so reversing weaker items would change their meaning without a wording-based reason. Q32, prompt loan processing, is the only item with a loading above 0.70. The factor explains **`r sprintf("%.1f%%", measure_summary[["Variance explained (%)"]][2])`** of item variance. Loan-rate competitiveness, confidentiality, processing speed, member needs and application simplicity cover different aspects of the credit union. I would keep them separate and report item-level distributions. Q32 can serve as the specific measure of perceived processing promptness.
+
+# Create the supported index
+
+```{r}
+#| label: employee-index
+data <- data |>
+  mutate(
+    employee_proficiency_index = rowMeans(pick(q3:q6), na.rm = TRUE),
+    employee_proficiency_index = na_if(employee_proficiency_index, NaN)
+  ) |>
+  set_variable_labels(
+    employee_proficiency_index = "Mean agreement with the four employee proficiency statements"
+  )
+
+summary(data$employee_proficiency_index)
+stopifnot(all(between(data$employee_proficiency_index, 1, 5) | is.na(data$employee_proficiency_index)))
+```
+
+I used the mean of the available q3–q6 responses. A respondent with all four answers missing would receive `NA`. All four items are complete in this file. The score stays on the 1–5 agreement scale, where a higher mean indicates a more favorable view of employee proficiency.
+
+# Data preparation narrative
+
+I imported the SPSS file with `haven::read_sav()` and kept that object as the reference. I used the questionnaire and its coding exhibit to fill missing labels, clarify what each question measured and separate the questionnaire fields from two precomputed scores. I checked the observed ranges before recoding. There were no stored code-6 responses in the three rating items that allow them, and q12’s coded nonanswers became missing values.
+
+I checked the new versions of q7, q8, q10 and q37 against the originals with paired frequency tables. I kept q9 as a frequency item because its middle category is the desired response. The original awareness and use categories remain available by service. Employee proficiency had support for an index from both the item statistics and the one-factor check. The operations items cover different topics and stay separate. The supplied SPSS extract lacks several questionnaire questions and the fieldwork identifiers that would be needed to link the 128 file records to the case narrative’s reported usable sample.
+
+# Confirm completeness with the final data dictionary
+
+```{r}
+#| label: final-dictionary
+stopifnot(
+  nrow(data) == nrow(data_raw),
+  identical(tools::md5sum(raw_path), raw_hash),
+  !any(c("OverallEmployeePerformace", "employeeperformance", "operational_effectiveness_index") %in% names(data)),
+  all(map_lgl(data, ~ !is.null(var_label(.x))))
+)
+knitr::kable(make_dictionary(data))
+```
+
+The console equivalent is `sjPlot::view_df(data)`. The final dictionary shows the questionnaire items, the four verified rating reversals and the employee proficiency index.
+
+# Save a new SPSS file
+
+```{r}
+#| label: save-spss
+clean_path <- "data/Case 31 Data_efcu_1_HM_cleaned.sav"
+write_sav(data, clean_path)
+reopened <- read_sav(clean_path)
+
+stopifnot(
+  identical(dim(reopened), dim(data)),
+  identical(names(reopened), names(data)),
+  all(map2_lgl(reopened, data, ~ isTRUE(all.equal(as.numeric(.x), as.numeric(.y))))),
+  all(map2_lgl(reopened, data, ~ identical(var_label(.x), var_label(.y)))),
+  all(map2_lgl(reopened, data, ~ identical(val_labels(.x), val_labels(.y)))),
+  identical(tools::md5sum(raw_path), raw_hash)
+)
+
+tibble(File = basename(clean_path), Records = nrow(reopened), Variables = ncol(reopened)) |>
+  knitr::kable()
+```
+
+# Appendix {.unnumbered}
+
+- [GitHub repository](https://github.com/hanamai111/case31)
+- [GitHub Pages report](https://hanamai111.github.io/case31/IC10-2-1-Data-Preparation-Case-31.html)
