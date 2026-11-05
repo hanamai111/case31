@@ -79,6 +79,7 @@ make_dictionary <- function(dataset) {
     Distinct = map_int(dataset, ~ n_distinct(.x, na.rm = TRUE)),
     Codes = map_chr(dataset, function(x) {
       labels <- val_labels(x)
+      if (is.null(labels)) return("")
       paste(paste0(unname(labels), " = ", names(labels)), collapse = ", ")
     })
   )
