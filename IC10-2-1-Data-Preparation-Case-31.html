@@ -3595,11 +3595,11 @@ $ employeeperformance       &lt;dbl&gt; 4.00, 4.00, 4.00, 3.75, 4.00, 4.00, 5.00
 <span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>data_labelled <span class="ot">&lt;-</span> data_raw <span class="sc">|&gt;</span></span>
 <span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">across</span>(<span class="fu">all_of</span>(agreement), <span class="sc">~</span> <span class="fu">set_value_labels</span>(.x, <span class="at">labels =</span> agreement_labels)),</span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">across</span>(<span class="fu">all_of</span>(agreement), <span class="sc">~</span> <span class="fu">set_value_labels</span>(.x, agreement_labels)),</span>
 <span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">across</span>(<span class="fu">all_of</span>(awareness), <span class="sc">~</span> <span class="fu">add_value_labels</span>(.x, <span class="st">&quot;Unaware&quot;</span> <span class="ot">=</span> <span class="dv">3</span>)),</span>
-<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a>    <span class="fu">across</span>(<span class="fu">all_of</span>(yes_no), <span class="sc">~</span> <span class="fu">set_value_labels</span>(.x, <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">&quot;Yes&quot;</span> <span class="ot">=</span> <span class="dv">1</span>, <span class="st">&quot;No&quot;</span> <span class="ot">=</span> <span class="dv">2</span>, <span class="st">&quot;No answer&quot;</span> <span class="ot">=</span> <span class="dv">3</span>))),</span>
-<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">across</span>(<span class="fu">c</span>(q7, q8), <span class="sc">~</span> <span class="fu">set_value_labels</span>(.x, <span class="at">labels =</span> rate_labels)),</span>
-<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">q37 =</span> <span class="fu">set_value_labels</span>(q37, <span class="at">labels =</span> rating_labels)</span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a>    <span class="fu">across</span>(<span class="fu">all_of</span>(yes_no), <span class="sc">~</span> <span class="fu">set_value_labels</span>(.x, <span class="fu">c</span>(<span class="st">&quot;Yes&quot;</span> <span class="ot">=</span> <span class="dv">1</span>, <span class="st">&quot;No&quot;</span> <span class="ot">=</span> <span class="dv">2</span>, <span class="st">&quot;No answer&quot;</span> <span class="ot">=</span> <span class="dv">3</span>))),</span>
+<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">across</span>(<span class="fu">c</span>(q7, q8), <span class="sc">~</span> <span class="fu">set_value_labels</span>(.x, rate_labels)),</span>
+<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">q37 =</span> <span class="fu">set_value_labels</span>(q37, rating_labels)</span>
 <span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
 <span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_variable_labels</span>(</span>
 <span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">q6 =</span> <span class="st">&quot;Credit union employees are always available&quot;</span>,</span>
@@ -3630,11 +3630,11 @@ $ employeeperformance       &lt;dbl&gt; 4.00, 4.00, 4.00, 3.75, 4.00, 4.00, 5.00
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
-<col style="width: 4%">
-<col style="width: 27%">
-<col style="width: 7%">
-<col style="width: 4%">
-<col style="width: 56%">
+<col style="width: 5%">
+<col style="width: 33%">
+<col style="width: 8%">
+<col style="width: 5%">
+<col style="width: 47%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -3651,21 +3651,21 @@ $ employeeperformance       &lt;dbl&gt; 4.00, 4.00, 4.00, 3.75, 4.00, 4.00, 5.00
 <td style="text-align: left;">Employees are Courteous</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: left;">1 = labels.Strongly disagree, 2 = labels.Disagree, 3 = labels.Uncertain, 4 = labels.Agree, 5 = labels.Strongly agree</td>
+<td style="text-align: left;">1 = Strongly disagree, 2 = Disagree, 3 = Uncertain, 4 = Agree, 5 = Strongly agree</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">q8</td>
 <td style="text-align: left;">Perceived rates charged to members for borrowing</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: left;">1 = labels.Very high, 2 = labels.High, 3 = labels.Average, 4 = labels.Low, 5 = labels.Very low, 6 = labels.No opinion</td>
+<td style="text-align: left;">1 = Very high, 2 = High, 3 = Average, 4 = Low, 5 = Very low, 6 = No opinion</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">q12</td>
 <td style="text-align: left;">Credit union keeps account information confidential</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: left;">1 = labels.Yes, 2 = labels.No, 3 = labels.No answer</td>
+<td style="text-align: left;">1 = Yes, 2 = No, 3 = No answer</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">q13</td>
@@ -3686,7 +3686,7 @@ $ employeeperformance       &lt;dbl&gt; 4.00, 4.00, 4.00, 3.75, 4.00, 4.00, 5.00
 <td style="text-align: left;">Overall rating of credit union management and operations</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: left;">1 = labels.Excellent, 2 = labels.Good, 3 = labels.Average, 4 = labels.Poor, 5 = labels.Very poor, 6 = labels.No answer</td>
+<td style="text-align: left;">1 = Excellent, 2 = Good, 3 = Average, 4 = Poor, 5 = Very poor, 6 = No answer</td>
 </tr>
 </tbody>
 </table>
@@ -4825,11 +4825,11 @@ $ employeeperformance       &lt;dbl&gt; 4.00, 4.00, 4.00, 3.75, 4.00, 4.00, 5.00
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
-<col style="width: 11%">
-<col style="width: 30%">
-<col style="width: 6%">
-<col style="width: 3%">
-<col style="width: 48%">
+<col style="width: 12%">
+<col style="width: 36%">
+<col style="width: 7%">
+<col style="width: 4%">
+<col style="width: 39%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -4846,42 +4846,42 @@ $ employeeperformance       &lt;dbl&gt; 4.00, 4.00, 4.00, 3.75, 4.00, 4.00, 5.00
 <td style="text-align: left;">Employees are Courteous</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: left;">1 = labels.Strongly disagree, 2 = labels.Disagree, 3 = labels.Uncertain, 4 = labels.Agree, 5 = labels.Strongly agree</td>
+<td style="text-align: left;">1 = Strongly disagree, 2 = Disagree, 3 = Uncertain, 4 = Agree, 5 = Strongly agree</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">q4</td>
 <td style="text-align: left;">employees are helpful</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: left;">1 = labels.Strongly disagree, 2 = labels.Disagree, 3 = labels.Uncertain, 4 = labels.Agree, 5 = labels.Strongly agree</td>
+<td style="text-align: left;">1 = Strongly disagree, 2 = Disagree, 3 = Uncertain, 4 = Agree, 5 = Strongly agree</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">q5</td>
 <td style="text-align: left;">employees are professional</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">3</td>
-<td style="text-align: left;">1 = labels.Strongly disagree, 2 = labels.Disagree, 3 = labels.Uncertain, 4 = labels.Agree, 5 = labels.Strongly agree</td>
+<td style="text-align: left;">1 = Strongly disagree, 2 = Disagree, 3 = Uncertain, 4 = Agree, 5 = Strongly agree</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">q6</td>
 <td style="text-align: left;">Credit union employees are always available</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: left;">1 = labels.Strongly disagree, 2 = labels.Disagree, 3 = labels.Uncertain, 4 = labels.Agree, 5 = labels.Strongly agree</td>
+<td style="text-align: left;">1 = Strongly disagree, 2 = Disagree, 3 = Uncertain, 4 = Agree, 5 = Strongly agree</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">q7</td>
 <td style="text-align: left;">Perceived rates paid on credit union share accounts</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: left;">1 = labels.Very high, 2 = labels.High, 3 = labels.Average, 4 = labels.Low, 5 = labels.Very low, 6 = labels.No opinion</td>
+<td style="text-align: left;">1 = Very high, 2 = High, 3 = Average, 4 = Low, 5 = Very low, 6 = No opinion</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">q8</td>
 <td style="text-align: left;">Perceived rates charged to members for borrowing</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: left;">1 = labels.Very high, 2 = labels.High, 3 = labels.Average, 4 = labels.Low, 5 = labels.Very low, 6 = labels.No opinion</td>
+<td style="text-align: left;">1 = Very high, 2 = High, 3 = Average, 4 = Low, 5 = Very low, 6 = No opinion</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">q9</td>
@@ -4902,14 +4902,14 @@ $ employeeperformance       &lt;dbl&gt; 4.00, 4.00, 4.00, 3.75, 4.00, 4.00, 5.00
 <td style="text-align: left;">Account statements are easy to understand</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">2</td>
-<td style="text-align: left;">1 = labels.Yes, 2 = labels.No, 3 = labels.No answer</td>
+<td style="text-align: left;">1 = Yes, 2 = No, 3 = No answer</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">q12</td>
 <td style="text-align: left;">Credit union keeps account information confidential</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">2</td>
-<td style="text-align: left;">1 = labels.Yes, 2 = labels.No, 3 = labels.No answer</td>
+<td style="text-align: left;">1 = Yes, 2 = No, 3 = No answer</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">q13</td>
@@ -5014,56 +5014,56 @@ $ employeeperformance       &lt;dbl&gt; 4.00, 4.00, 4.00, 3.75, 4.00, 4.00, 5.00
 <td style="text-align: left;">currently have loan</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">2</td>
-<td style="text-align: left;">1 = labels.Yes, 2 = labels.No, 3 = labels.No answer</td>
+<td style="text-align: left;">1 = Yes, 2 = No, 3 = No answer</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">q30</td>
 <td style="text-align: left;">Credit union loan rates are lower than competitors’ rates</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: left;">1 = labels.Strongly disagree, 2 = labels.Disagree, 3 = labels.Uncertain, 4 = labels.Agree, 5 = labels.Strongly agree</td>
+<td style="text-align: left;">1 = Strongly disagree, 2 = Disagree, 3 = Uncertain, 4 = Agree, 5 = Strongly agree</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">q31</td>
 <td style="text-align: left;">Credit union personnel keep personal financial information confidential</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: left;">1 = labels.Strongly disagree, 2 = labels.Disagree, 3 = labels.Uncertain, 4 = labels.Agree, 5 = labels.Strongly agree</td>
+<td style="text-align: left;">1 = Strongly disagree, 2 = Disagree, 3 = Uncertain, 4 = Agree, 5 = Strongly agree</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">q32</td>
 <td style="text-align: left;">Credit union processes loan applications promptly</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: left;">1 = labels.Strongly disagree, 2 = labels.Disagree, 3 = labels.Uncertain, 4 = labels.Agree, 5 = labels.Strongly agree</td>
+<td style="text-align: left;">1 = Strongly disagree, 2 = Disagree, 3 = Uncertain, 4 = Agree, 5 = Strongly agree</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">q33</td>
 <td style="text-align: left;">Current financial services meet members’ needs</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: left;">1 = labels.Strongly disagree, 2 = labels.Disagree, 3 = labels.Uncertain, 4 = labels.Agree, 5 = labels.Strongly agree</td>
+<td style="text-align: left;">1 = Strongly disagree, 2 = Disagree, 3 = Uncertain, 4 = Agree, 5 = Strongly agree</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">q34</td>
 <td style="text-align: left;">Loan applications are simple to complete</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: left;">1 = labels.Strongly disagree, 2 = labels.Disagree, 3 = labels.Uncertain, 4 = labels.Agree, 5 = labels.Strongly agree</td>
+<td style="text-align: left;">1 = Strongly disagree, 2 = Disagree, 3 = Uncertain, 4 = Agree, 5 = Strongly agree</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">q37</td>
 <td style="text-align: left;">Overall rating of credit union management and operations</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: left;">1 = labels.Excellent, 2 = labels.Good, 3 = labels.Average, 4 = labels.Poor, 5 = labels.Very poor, 6 = labels.No answer</td>
+<td style="text-align: left;">1 = Excellent, 2 = Good, 3 = Average, 4 = Poor, 5 = Very poor, 6 = No answer</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">q38</td>
 <td style="text-align: left;">Lives in the headquarters area</td>
 <td style="text-align: left;">haven_labelled</td>
 <td style="text-align: right;">2</td>
-<td style="text-align: left;">1 = labels.Yes, 2 = labels.No, 3 = labels.No answer</td>
+<td style="text-align: left;">1 = Yes, 2 = No, 3 = No answer</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">q7r</td>
