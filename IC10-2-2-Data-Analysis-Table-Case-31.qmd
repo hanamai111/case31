@@ -1,0 +1,242 @@
+---
+title: "IC10-2-2 — Data Analysis Table: Research Questions with Case 31"
+subtitle: "Employees Federal Credit Union"
+author: "Han Mai"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    page-layout: full
+    embed-resources: true
+    theme: cosmo
+    code-fold: true
+execute:
+  message: false
+  warning: false
+---
+
+<style>
+.plan-table { overflow-x: auto; margin-bottom: 1.5rem; }
+.plan-table table { min-width: 870px; width: 100%; table-layout: fixed; }
+.plan-table th, .plan-table td { vertical-align: top; white-space: normal; overflow-wrap: anywhere; }
+.plan-table th:first-child, .plan-table td:first-child { width: 12%; }
+.plan-table th:nth-child(2), .plan-table td:nth-child(2) { width: 22%; }
+.plan-table th:nth-child(3), .plan-table td:nth-child(3) { width: 27%; }
+.plan-table th:nth-child(4), .plan-table td:nth-child(4) { width: 15%; }
+.plan-table th:nth-child(5), .plan-table td:nth-child(5) { width: 24%; }
+.plan-table col:nth-child(1) { width: 12% !important; }
+.plan-table col:nth-child(2) { width: 22% !important; }
+.plan-table col:nth-child(3) { width: 27% !important; }
+.plan-table col:nth-child(4) { width: 15% !important; }
+.plan-table col:nth-child(5) { width: 24% !important; }
+.plan-table code { overflow-wrap: anywhere; white-space: normal; }
+</style>
+
+# Assignment scope and case context
+
+EFCU wants to understand why members borrow elsewhere while the credit union holds surplus funds. The survey also asks about employees, service awareness, operations, and differences between members living near headquarters and elsewhere. This table plans the analyses that would answer the assigned questions.
+
+I followed the five column headings and row sequence in the [official Word assignment](https://livecsupomona-my.sharepoint.com/:w:/g/personal/jmjung_cpp_edu/IQCakc5-e-b_QZWRWPoPvryXATaxZjAzQLUxcEv7pVviiq8?e=Iiuafg). The file includes R1–R6, with R4 divided into a, b, and c, plus H1 and H2. All are included below. The [Canvas instructions](https://canvas.cpp.edu/courses/143274/pages/step-6-1-apply-what-you-learned-to-ic10-2-2-data-analysis-table-research-questions-with-case31-assignment?module_item_id=5422882) allow QMD/HTML with GitHub Pages and both Appendix links.
+
+## Data preparation linkage
+
+The analysis variables follow [IC10-2-1](IC10-2-1-Data-Preparation-Case-31.html). The supported `employee_proficiency_index` is the mean of q3–q6. The q30–q34 items remain separate because the prior reliability and dimensionality checks did not support one operations index. The analytical rating versions are `q7r`, `q8r`, `q10r`, and `q37r`. Higher q8r means higher perceived borrowing rates, which members may find less attractive. Q9 remains in its original coding, with “About right” in the middle. Awareness/use stays categorical by service.
+
+```{r}
+#| label: inspect-existing-cleaned-data
+library(haven)
+
+cleaned_file <- "data/Case 31 Data_efcu_1_HM_cleaned.sav"
+stopifnot(file.exists(cleaned_file))
+cleaned_hash <- tools::md5sum(cleaned_file)
+analysis_data <- read_sav(cleaned_file)
+
+required <- c(
+  paste0("q", 3:6), "q7r", "q8r", "q9", "q10r", "q11", "q12",
+  paste0("q", 13:26), paste0("q", 30:34), "q37r", "q38",
+  "employee_proficiency_index"
+)
+stopifnot(
+  all(required %in% names(analysis_data)),
+  !"operational_effectiveness_index" %in% names(analysis_data)
+)
+employee_mean_check <- rowMeans(
+  as.data.frame(lapply(analysis_data[paste0("q", 3:6)], as.numeric)),
+  na.rm = TRUE
+)
+stopifnot(isTRUE(all.equal(
+  as.numeric(analysis_data$employee_proficiency_index),
+  employee_mean_check
+)))
+
+knitr::kable(data.frame(
+  File = basename(cleaned_file),
+  Records = nrow(analysis_data),
+  Variables = ncol(analysis_data),
+  Required_fields_present = all(required %in% names(analysis_data))
+))
+```
+
+This reads the existing cleaned export. The checks confirm the required fields and the saved employee index. All tables below specify planned analyses. After a fresh repository clone, render IC10-2-1 first to recreate its local cleaned export, then render this file.
+
+# Official research questions and hypotheses
+
+The wording below follows the assignment.
+
+1. **R1.** Why do people join the Credit Union?
+2. **R2.** Why do members use other financial institutions when they need to borrow funds?
+3. **R3.** What are the members’ attitudes and beliefs about the proficiencies of credit union employees?
+4. **R4.** Are there any perceived differences on (a) attitude towards employee proficiencies, (b) awareness of services, and (c) operational effectiveness between members who live in the area of the firm’s headquarters and members who live elsewhere?
+5. **R5.** How well are the members aware of the services offered by the credit union?
+6. **R6.** What are the members’ attitudes and beliefs about how effectively the credit union is operated?
+
+**H1.** Members’ awareness of the regular share accounts will influence their opinions on how well the current financial services provided by the credit union meet their needs.
+
+**H2.** Members will not be different in their opinion on CU’s loan rate (Q8r) and the degree to which they agree that CU’s loan rate is lower than competitors (Q30).
+
+# Data Analysis Table
+
+On a narrow screen, scroll each table horizontally to see all five columns.
+
+**Scale convention.** The questionnaire’s ordered ratings are ordinal at the item level. For the metric procedures shown in the template, I use the course’s approximate-interval treatment of the agreement ratings, employee index, q7r, q8r, q10r, and q37r. I identify that assumption in the Scale column. Q9 is an ordered frequency category with a middle optimum. Awareness/use and yes/no responses are analyzed as categories. None of these measures is a ratio scale.
+
+**Controls.** Control variables are N/A for every row. The assignment specifies no adjustment variables. Descriptive RQs have no IV/DV. In the comparison rows, headquarters residence defines the two independent member groups.
+
+## R1–R3
+
+::: {.plan-table role="region" aria-label="Analysis table for R1 to R3" tabindex="0"}
+
+| Hypothesis / RQ | Constructs & Their Role | Operationalization of the Constructs | Scale | Statistical Test |
+|---|---|---|---|---|
+| R1 | Reasons for joining, descriptive. IV/DV N/A. | **Q2**, “Why did you join the Credit Union?” Multiple reasons may be selected. Q2 is absent from this extract. Each option would be a separate selected/unselected indicator. | Nominal for each reason. | Multiple-response frequencies and percentages of members selecting each reason. Requires Q2 data. |
+| R1, template rating example | Perceived savings rates, descriptive supplement. IV/DV N/A. | **q7r**, perceived rates paid on share/savings accounts. Higher = higher perceived rates. This is the rating listed as Q7 in the template’s R1 example. | Ordinal rating, treated as interval in the template. | Frequencies, mean and SD. One-sample (“one group”) t-test against 3, “Average,” for the template’s rating comparison. |
+| R2 | Reasons for borrowing elsewhere, descriptive. IV/DV N/A. | **Q29**, “Why did you go to a source other than the Credit Union?” **Q28** identifies members who borrowed elsewhere in the past year. Both are absent. Tabulate the listed reason categories, allowing multiple selections if recorded, and code any “Other” text separately. | Q28 nominal yes/no. Q29 nominal reason categories. | Frequencies and percentages among members eligible for Q29. Requires Q28/Q29 data and the recorded response format. |
+| R2, rate context | Perceived borrowing rates and relative loan-rate competitiveness, descriptive supplements. IV/DV N/A. | **q8r**, perceived rates charged for borrowing, higher = higher rates. **q30**, agreement that EFCU loan rates are lower than competitors, higher = stronger agreement. | Ordered items, treated as interval for course mean comparisons. | Descriptive statistics for each item. If evaluating the ratings against their scale references, separate one-sample t-tests against 3, “Average” for q8r and “Uncertain” for q30. |
+| R3 | Attitudes toward employee proficiency, descriptive. IV/DV N/A. | **employee_proficiency_index**, supported mean of **q3–q6** covering courtesy, helpfulness, professionalism, and availability. Higher = more favorable employee perceptions. | Approximately interval under the course convention. | Mean, SD and distribution. One-sample t-test against 3, the agreement scale’s “Uncertain” reference, as the template’s follow-up. Use the Part 1 reliability/factor decision. |
+
+:::
+
+## R4a–R4c
+
+Each member belongs to one q38 residence group. Outcomes within R4c are examined separately.
+
+::: {.plan-table role="region" aria-label="Analysis table for R4 group comparisons" tabindex="0"}
+
+| Hypothesis / RQ | Constructs & Their Role | Operationalization of the Constructs | Scale | Statistical Test |
+|---|---|---|---|---|
+| R4a | IV — member residence. DV — employee proficiency. | IV **q38**, lives in headquarters area, 1 = Yes, 2 = No. DV **employee_proficiency_index** from q3–q6. | IV nominal, two groups. DV approximately interval. | Group means/SDs followed by an independent-samples t-test, using Welch’s version to allow unequal variances. |
+| R4b | IV — member residence. Outcomes — awareness/use of each service. | **q38** and each of **q13–q26**, analyzed individually. Categories are aware and used, aware but unused, and unaware. | Residence nominal. Service status nominal categories, with the template’s ordinal awareness/use interpretation available. | Two-way cross-tabulations and row percentages, followed by a chi-square test of independence for each service. |
+| R4c, statement frequency | IV — member residence. Outcome — statement frequency. | **q38** and **q9**. “About right” = 3. Preserve the frequency categories. | Residence nominal. Frequency ordinal, analyzed categorically. | Cross-tabulation and chi-square test of independence. |
+| R4c, statement accuracy | IV — member residence. DV — statement accuracy. | **q38** and **q10r**, 1 = Poor through 4 = Excellent. | IV nominal. DV ordinal, treated as interval in the template. | Group descriptive statistics followed by an independent-samples Welch t-test. |
+| R4c, account information | IV — member residence. Outcomes — statement understandability and account confidentiality. | **q38** with **q11** and **q12**, separately. Both use 1 = Yes, 2 = No. q12’s coded nonanswers are already NA. | Nominal for residence and both yes/no outcomes. | Separate cross-tabulations and chi-square tests of independence. |
+| R4c, operating aspects | IV — member residence. Separate DVs — confidentiality, prompt processing, needs met, application simplicity, and overall management/operations rating. | **q38** with **q31, q32, q33, q34**, and **q37r**, one outcome at a time. q32 specifically measures prompt loan processing. Higher scores = stronger agreement or a better overall rating. | IV nominal. Ordered DVs treated as interval under the course convention. | Separate group descriptive statistics and independent-samples Welch t-tests for each outcome. |
+
+:::
+
+## R5–R6
+
+::: {.plan-table role="region" aria-label="Analysis table for R5 and R6" tabindex="0"}
+
+| Hypothesis / RQ | Constructs & Their Role | Operationalization of the Constructs | Scale | Statistical Test |
+|---|---|---|---|---|
+| R5 | Awareness/use of each service, descriptive. IV/DV N/A. | Each **q13–q26** service item, separately. Report all three categories. Awareness includes both aware-and-used and aware-but-unused responses. | Nominal service categories, with a possible ordinal awareness/use progression. | Frequencies and percentages by service, including percentage aware and percentage who have used it. |
+| R6, statement frequency | Statement frequency, descriptive. IV/DV N/A. | **q9**, including percentage reporting “About right.” | Ordinal, analyzed categorically. | Frequencies and percentages. |
+| R6, statement accuracy | Perceived statement accuracy, descriptive. IV/DV N/A. | **q10r**, higher = better accuracy. | Ordinal, treated as interval in the template. | Frequencies, mean and SD. A one-sample t-test would require an explicitly chosen benchmark. |
+| R6, account information | Statement understandability and account confidentiality, descriptive. IV/DV N/A. | **q11** and **q12**, separately, using substantive Yes/No responses. | Nominal. | Frequencies and valid-response percentages for each item. |
+| R6, operating aspects | Perceived confidentiality, processing promptness, needs met, application simplicity, and overall management/operations, descriptive. IV/DV N/A. | **q31, q32, q33, q34**, and **q37r**, separately. | Ordered items treated as interval under the course convention. | Frequencies, means and SDs for each item. Course-style one-sample t-tests against 3 may follow for q31–q34 (“Uncertain”) and q37r (“Average”). |
+
+:::
+
+## H1–H2 from the official file
+
+::: {.plan-table role="region" aria-label="Analysis table for the two assigned hypotheses" tabindex="0"}
+
+| Hypothesis / RQ | Constructs & Their Role | Operationalization of the Constructs | Scale | Statistical Test |
+|---|---|---|---|---|
+| H1 | IV — regular-share-account awareness/use group. DV — agreement that current services meet members’ needs. Controls N/A. | **q13** defines three groups using its labels. **q33** measures whether services meet members’ needs, higher = stronger agreement. The template’s Q13r is a reordered version of q13’s same categories. | IV ordinal awareness/use in the template, entered as a categorical factor. DV agreement item treated as interval. | Group descriptive statistics followed by one-way ANOVA across the three awareness/use groups. |
+| H2 | Within-person comparison factor — rating/question type. Outcomes — the same member’s borrowing-rate perception and agreement about relative loan rates. No causal predictor. Controls N/A. | Paired **q8r** and **q30** responses from the same member. Higher q8r = higher perceived borrowing rates. Higher q30 = stronger agreement that EFCU rates are lower than competitors. | Two ordinal items treated as interval in the template. Their response anchors and meanings differ. | **Paired-samples t-test**, the template’s intended comparison, conditional on confirming that the mean numeric score comparison is substantively meaningful. See the H2 qualification below. |
+
+:::
+
+# Analysis Rationale
+
+- **R1.** Q2 directly asks why members joined, so its response options call for counts and percentages. The template lists Q7 and a one-group t-test. I retained that as a separate savings-rate assessment with an explicit reference of 3. That rating alone cannot establish why a person joined.
+- **R2.** Q29 directly addresses borrowing elsewhere, with Q28 supplying the eligibility screen. The available q8r and q30 ratings provide rate context. Their descriptive and reference-score comparisons answer narrower questions about loan-rate perceptions.
+- **R3.** The existing employee index summarizes the four supported employee items on their 1–5 scale. A one-sample t-test would compare its mean with the neutral/uncertain reference of 3. This is the inferential follow-up supplied in the template.
+- **R4a.** The two residence groups contain different members, and employee proficiency is treated as interval. This matches the independent-groups metric branch on Chapter 15 slide 23.
+- **R4b.** Residence and service status form a two-way frequency table for each service. Chi-square addresses whether the category distributions differ by residence. Reordering the service codes would give the same chi-square result.
+- **R4c.** The test follows each outcome’s scale. I use chi-square for categorical frequency and yes/no responses, and independent-samples t-tests for interval-treated ratings. The operating items remain separate.
+- **R5.** This asks how well members know the services. Category percentages preserve the difference between knowing a service exists and actually using it. Averaging across products would hide those distinctions.
+- **R6.** Item-level descriptions answer the operational question without assuming one common operations score. Any one-sample comparison needs a stated scale reference. Q10r has four response levels and no neutral category, so I leave its benchmark unspecified.
+- **H1.** Slide 24 maps a categorical predictor and metric outcome to ANOVA. Treating q13 as a three-level factor avoids assuming equal distances between unaware, aware but unused, and used. This plans a comparison of q33 means across those groups. The survey can support an association, while the hypothesis’s word “influence” would require stronger evidence for a causal interpretation.
+- **H2.** Both ratings come from each respondent, so the observations are paired. The template’s paired t-test would assess the mean within-member numeric score difference. However, q8r rates the absolute level of borrowing rates, and q30 rates agreement about competitors. Their directions and anchors differ. I would confirm the intended comparison with Professor Jung before interpreting it as agreement about rates. A conventional test of zero mean difference would also leave an equivalence claim unestablished.
+
+Before executing these tests, I would use valid responses for the variables in each analysis, check independence between members, inspect group sizes and rating distributions, and check expected counts for chi-square. Sparse categorical tables may require an exact or simulated p-value. The paired test would use complete q8r/q30 pairs. Multiple service and operating-item comparisons would be identified as a family of tests and interpreted accordingly. These are execution checks for the proposed analyses.
+
+# Questionnaire mapping and template qualifications
+
+## Item wording and coding
+
+The narrative, questionnaire and coding exhibit are available in the [Case 31 source PDF](https://github.com/jaejungca/case31/blob/main/Case%2031%20-%20Employees%20Federal%20Credit%20Union.PDF).
+
+| Items | What the questionnaire asks | Coding used for this plan |
+|---|---|---|
+| Q2 | Why did you join the Credit Union? | Check all applicable reasons, planned separate nominal indicators. Absent from the extract. |
+| Q3–Q6 | Employees are courteous, helpful, professional, and always available. | 1 = Strongly disagree through 5 = Strongly agree. Existing mean index used. |
+| Q7 / q7r | Opinion of rates paid on share/savings accounts. | q7r runs 1 = Very low through 5 = Very high. |
+| Q8 / q8r | Opinion of rates charged to members borrowing funds. | q8r runs 1 = Very low through 5 = Very high. |
+| Q9 | How often do you receive an account statement? | 1 = Too often, 2 = Very often, 3 = About right, 4 = Not often enough, 5 = Never. |
+| Q10 / q10r | Accuracy of statements. | q10r runs 1 = Poor, 2 = Fair, 3 = Good, 4 = Excellent. |
+| Q11 | Are statements easy to understand? | 1 = Yes, 2 = No. Code 3 denotes No answer. |
+| Q12 | Does EFCU maintain account information confidentially? | 1 = Yes, 2 = No. The 22 code-3 nonanswers were changed to NA in Part 1. |
+| Q28 | Borrowed elsewhere in the past year? | Yes/No eligibility screen for Q29. Absent from the extract. |
+| Q29 | Why did you go to a source other than EFCU? | Listed reasons and Other text. Absent from the extract. |
+| Q30 | EFCU loan rates are lower than those offered elsewhere. | Agreement, 1–5. |
+| Q31 | Personnel keep personal financial information confidential. | Agreement, 1–5. |
+| Q32 | EFCU processes loan applications promptly. | Agreement, 1–5. |
+| Q33 | Current financial services meet members’ needs. | Agreement, 1–5. |
+| Q34 | Loan applications are simple and easy to complete. | Agreement, 1–5. |
+| Q37 / q37r | Overall feeling about how EFCU is managed and operated. | q37r runs 1 = Very poor through 5 = Excellent. |
+| Q38 | Do you live in the headquarters area? | 1 = Yes, 2 = No. |
+
+For each service below, the saved codes are 1 = Aware and have used, 2 = Aware but have not used, and 3 = Unaware.
+
+```{r}
+#| label: service-items
+service_variables <- paste0("q", 13:26)
+service_names <- c(
+  "Regular share accounts", "Special subaccounts", "Christmas club accounts",
+  "Individual retirement accounts", "MasterCard credit cards", "Signature loans",
+  "New car loans", "Late model car loans", "Older model car loans",
+  "Household goods/appliance loans", "Recreational loans",
+  "Share collateralized loans", "IRA loans", "Line of credit loans"
+)
+knitr::kable(data.frame(
+  Item = service_variables,
+  Service = service_names,
+  Available = service_variables %in% names(analysis_data)
+))
+```
+
+## Differences that matter for this plan
+
+1. **R1’s Q7 example.** Q7 measures savings-rate perceptions. Q2 measures the stated reasons for joining. Both mappings appear in this report, with their distinct purposes.
+2. **R1/R2 availability.** The current extract has no Q2, Q28 or Q29. Their conceptual plans are complete, but the direct reason analyses require the missing questionnaire data. The table does not infer reasons from rating scores.
+3. **Q9r and Q12rc notation.** The template uses these names. The verified Part 1 export contains q9 and q12. Q9 keeps its middle-optimum coding, and q12 already has its nonanswers set to missing.
+4. **Q13r–Q26r notation.** The template uses reversed awareness/use codes. Part 1 kept that reversal as a separate ordinal exercise and exported the original q13–q26 categories. The planned tables and factor-coded H1 predictor use those existing categories. Reordering their labels would leave the category comparisons unchanged.
+5. **Att_Employee notation.** The template’s employee construct maps to the existing `employee_proficiency_index`.
+6. **Operations.** I follow the template’s Q9, Q10, Q11, Q12, Q31–Q34 and Q37 coverage using the verified variable versions. Q30 is included individually for rate context and H2. Each operational aspect gets its own analysis.
+7. **H2 interpretation.** The requested paired-test row is completed, with the scale-comparability qualification stated above.
+
+```{r}
+#| label: preserve-cleaned-export
+stopifnot(identical(tools::md5sum(cleaned_file), cleaned_hash))
+```
+
+# Appendix
+
+- [GitHub Repository](https://github.com/hanamai111/case31)
+- [GitHub Pages — IC10-2-2](https://hanamai111.github.io/case31/IC10-2-2-Data-Analysis-Table-Case-31.html)
+- [IC10-2-1 — Data Preparation](IC10-2-1-Data-Preparation-Case-31.html)
+- [Official Word assignment](https://livecsupomona-my.sharepoint.com/:w:/g/personal/jmjung_cpp_edu/IQCakc5-e-b_QZWRWPoPvryXATaxZjAzQLUxcEv7pVviiq8?e=Iiuafg)
+- [Course data analysis strategy, Chapter 15 slides 23–25](https://canvas.cpp.edu/courses/143274/pages/optional-step-5-review-data-analysis-strategy-part-of-chapter-15-if-you-need?module_item_id=5422881)
