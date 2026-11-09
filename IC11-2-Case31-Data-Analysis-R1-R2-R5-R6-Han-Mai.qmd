@@ -364,7 +364,7 @@ All five means were above their respective scale references (each `r paste0("p "
 
 ## Limitations
 
-- Q2, Q28 and Q29 are absent from the Module 10 extract. The analysis follows the key’s rate measures while keeping the direct reasons unresolved.
+- Both the Module 10 extract and the Module 11 fallback (`Case 31 Data_efcu_4.sav`) lack Q2, Q28 and Q29. The available rate measures describe perceptions. Direct reasons for joining or borrowing elsewhere remain unknown.
 - The narrative describes 125 returns and two exclusions. The supplied extract has `r nrow(d)` records, and the case materials do not explain that difference.
 - Results describe reported views and use. The q30–q34 items measure separate perceptions. Test p-values are unadjusted and interpreted per item.
 
