@@ -1,0 +1,379 @@
+---
+title: "IC11-2 — Case 31: Summary of Data Analysis"
+subtitle: "R1, R2, R5, and R6"
+author: "Han Mai"
+format:
+  revealjs:
+    embed-resources: true
+    theme: simple
+    slide-number: true
+    width: 1280
+    height: 800
+    controls: true
+header-includes: |
+  <style>
+  .reveal table { font-size: 25px; }
+  .reveal table th, .reveal table td { padding: .25em .35em; }
+  .reveal figcaption, .reveal .quarto-float-caption { font-size: 24px; }
+  </style>
+execute:
+  echo: false
+  warning: false
+---
+
+```{r}
+#| include: false
+library(haven)
+library(ggplot2)
+library(knitr)
+
+file <- "data/Case 31 Data_efcu_1_HM_cleaned.sav"
+d <- read_sav(file)
+services <- paste0("q", 13:26)
+categorical <- c("q9", "q10r", "q11", "q12")
+ratings <- c("q7r", "q8r", "q30", paste0("q", 31:34), "q37r")
+direct <- c("q2", "q28", "q29")
+stopifnot(nrow(d) == 128, ncol(d) == 37,
+          all(c(services, categorical, ratings) %in% names(d)),
+          !any(direct %in% tolower(names(d))))
+for (item in c("q7", "q8", "q10", "q37")) {
+  upper <- if (item == "q10") 5 else 6
+  stopifnot(identical(as.numeric(d[[paste0(item, "r")]]),
+                      upper - as.numeric(d[[item]])))
+}
+labels <- c(q7r = "Savings rates", q8r = "Borrowing rates",
+            q30 = "Loan rates lower than elsewhere",
+            q9 = "Statement frequency", q10r = "Statement accuracy",
+            q11 = "Statements easy to understand",
+            q12 = "Account information kept confidential",
+            q31 = "Personnel confidentiality",
+            q32 = "Prompt loan processing",
+            q33 = "Services meet member needs",
+            q34 = "Simple loan applications",
+            q37r = "Overall operations")
+service_names <- vapply(d[services], function(x) tools::toTitleCase(attr(x, "label")), "")
+pct <- function(x) sprintf("%.1f%%", 100 * x)
+pval <- function(x) ifelse(x < .001, "< .001", sprintf("%.3f", x))
+freq <- function(item) {
+  x <- d[[item]]
+  codes <- attr(x, "labels")
+  codes <- codes[!tolower(names(codes)) %in% c("no answer", "no opinion")]
+  values <- as.numeric(x)
+  stopifnot(all(is.na(values) | values %in% unname(codes)))
+  counts <- as.integer(table(factor(values, levels = unname(codes))))
+  stopifnot(sum(counts) == sum(!is.na(values)), sum(counts) > 0)
+  data.frame(Item = item, Response = names(codes), Count = counts,
+             Valid = sum(counts), Share = counts / sum(counts))
+}
+dist <- setNames(lapply(c(services, categorical, ratings), freq),
+                 c(services, categorical, ratings))
+aware <- vapply(dist[services], function(x) sum(x$Share[1:2]), 0)
+used <- vapply(dist[services], function(x) x$Share[1], 0)
+gap <- aware - used
+ref_label <- setNames(vapply(ratings, function(i) {
+  labs <- attr(d[[i]], "labels")
+  names(labs)[labs == 3]
+}, ""), ratings)
+tests <- setNames(lapply(ratings, function(i) t.test(as.numeric(d[[i]]), mu = 3)),
+                  ratings)
+gof <- setNames(lapply(c(services, categorical), function(i) {
+  chisq.test(dist[[i]]$Count)
+}), c(services, categorical))
+stopifnot(all(vapply(gof, function(x) min(x$expected) >= 5, TRUE)))
+
+display_freq <- function(i) {
+  x <- dist[[i]]
+  data.frame(Response = x$Response, Count = x$Count, `Valid %` = pct(x$Share),
+             check.names = FALSE)
+}
+service_table <- function(items) {
+  do.call(rbind, lapply(items, function(i) {
+    x <- dist[[i]]
+    values <- sprintf("%d (%s)", x$Count, pct(x$Share))
+    data.frame(Service = service_names[[i]], `Valid n` = x$Valid[1],
+               Used = values[1], `Aware, unused` = values[2],
+               Unaware = values[3], `Total aware` = pct(aware[[i]]),
+               check.names = FALSE)
+  }))
+}
+service_plot <- function(items) {
+  x <- do.call(rbind, dist[items])
+  x$Service <- factor(service_names[x$Item], levels = rev(service_names[items]))
+  x$Response <- factor(x$Response, levels = dist[[items[1]]]$Response)
+  ggplot(x, aes(Share, Service, fill = Response)) +
+    geom_col(position = position_stack(reverse = TRUE), width = .68) +
+    scale_x_continuous(labels = scales::label_percent(), limits = c(0, 1.001),
+                       breaks = seq(0, 1, .25)) +
+    scale_fill_manual(values = c("#12677C", "#68B7BC", "#D8E0EA")) +
+    labs(x = "Percent of valid responses", y = NULL, fill = NULL) +
+    theme_minimal(base_size = 16) +
+    theme(legend.position = "bottom", panel.grid.major.y = element_blank())
+}
+rating_plot <- function(i) {
+  x <- dist[[i]]
+  x$Response <- factor(x$Response, levels = x$Response)
+  ggplot(x, aes(Response, Count)) +
+    geom_col(fill = "#12677C", width = .63) +
+    geom_text(aes(label = pct(Share)), vjust = -.4, size = 5) +
+    scale_y_continuous(expand = expansion(mult = c(0, .14))) +
+    labs(x = NULL, y = "Responses") + theme_minimal(base_size = 16)
+}
+rating_table <- function(items) {
+  do.call(rbind, lapply(items, function(i) {
+    x <- as.numeric(d[[i]])
+    t <- tests[[i]]
+    data.frame(Item = paste(labels[[i]], paste0("(", i, ")")),
+               n = sum(!is.na(x)), Mean = sprintf("%.2f", mean(x, na.rm = TRUE)),
+               SD = sprintf("%.2f", sd(x, na.rm = TRUE)),
+               Reference = paste("3 =", ref_label[[i]]),
+               t = sprintf("%.2f", t$statistic), df = unname(t$parameter),
+               p = pval(t$p.value))
+  }))
+}
+gof_table <- function(items) {
+  do.call(rbind, lapply(items, function(i) {
+    g <- gof[[i]]
+    data.frame(Item = if (i %in% services) service_names[[i]] else labels[[i]],
+               n = sum(g$observed), `χ²` = sprintf("%.2f", g$statistic),
+               df = unname(g$parameter), p = pval(g$p.value), check.names = FALSE)
+  }))
+}
+response_pct <- function(i, codes) pct(sum(dist[[i]]$Share[codes]))
+mean_text <- function(i) sprintf("%.2f", tests[[i]]$estimate)
+best <- function(x) names(x)[x == max(x)]
+worst <- function(x) names(x)[x == min(x)]
+service_insight <- function(ids, x) paste(
+  sprintf("%s (%s)", service_names[ids], pct(x[ids])), collapse = ", ")
+
+```
+
+## Data and methods
+
+- Employees Federal Credit Union member opinion survey. R reads the cleaned Module 10 SPSS export directly (`r nrow(d)` records).
+- Percentages use each item's valid responses. “No opinion” and “No answer” follow the existing missing-value decisions.
+- The analysis-table key determines test type. The questionnaire and saved SPSS labels determine category meaning.
+- Two-sided one-sample t-tests use the labeled midpoint for interval-treated ratings. Goodness-of-fit tests compare substantive response shares with equal shares. The key gives the test type, and equal shares are the reference assumption used here.
+
+## R1 · Reasons for joining
+
+**Why do people join the Credit Union?**
+
+Q2 allows multiple reasons per member, including convenience, savings rates, personal service, access to borrowing, advertising and Other. The extract lacks Q2, so the distribution of joining reasons is unavailable.
+
+### Savings-rate perception (q7r)
+
+```{r}
+#| label: fig-savings
+#| fig-cap: "Savings-rate ratings. Bar labels show valid-response percentages."
+#| fig-width: 9
+#| fig-height: 3.2
+rating_plot("q7r")
+```
+
+`r response_pct("q7r", 3)` of valid respondents rated savings rates **Average** (@fig-savings).
+
+## R1 · One-sample t-test
+
+```{r}
+#| label: tbl-savings
+#| tbl-cap: "Savings-rate rating versus Average."
+kable(rating_table("q7r"))
+```
+
+The data provided insufficient evidence that the mean differed from **Average** (@tbl-savings). The scale runs from Very low to Very high. The item captures members’ assessment of savings rates.
+
+## R2 · Reasons for borrowing elsewhere
+
+**Why do members use other financial institutions when they need to borrow funds?**
+
+- Q28 screens for borrowing elsewhere in the past year. A No response skips Q29. Q29 lists reasons such as better rates, an established credit line and preference for a local institution. Its wording leaves the number of permitted choices unspecified.
+- Both fields are absent. The key supplies two contextual measures, **q8r** for perceived borrowing-rate level and **q30** for agreement that EFCU rates are lower than elsewhere.
+
+## R2 · Rate perceptions
+
+```{r}
+#| label: fig-borrowing
+#| fig-cap: "Perceived borrowing-rate level (q8r). Bar labels show valid-response percentages."
+#| fig-width: 9
+#| fig-height: 3.5
+rating_plot("q8r")
+```
+
+`r response_pct("q8r", 3)` rated borrowing rates **Average** (@fig-borrowing). For q30, `r response_pct("q30", 4:5)` agreed or strongly agreed that EFCU rates were lower than elsewhere.
+
+## R2 · One-sample t-tests
+
+```{r}
+#| label: tbl-loan-rates
+#| tbl-cap: "Loan-rate perceptions versus their scale references."
+kable(rating_table(c("q8r", "q30")))
+```
+
+`r paste(vapply(c("q8r", "q30"), function(i) {
+  t <- tests[[i]]
+  direction <- if (t$estimate > 3) "above" else "below"
+  if (t$p.value < .05) paste0(labels[[i]], " (", i, ") averaged significantly ", direction, " “", ref_label[[i]], ".”")
+  else paste0("For ", i, ", evidence was insufficient to establish a difference from “", ref_label[[i]], ".”")
+}, ""), collapse = " ")` See @tbl-loan-rates.
+
+## R5 · Service awareness and use
+
+**How well are the members aware of the services offered by the credit union?**
+
+- Highest awareness: `r service_insight(best(aware), aware)`.
+- Lowest awareness: `r service_insight(worst(aware), aware)`.
+- Signature loans had the largest gap. Awareness was `r pct(aware[["q18"]])`, and reported use was `r pct(used[["q18"]])` (`r sprintf("%.1f", 100 * gap[["q18"]])` percentage points).
+- Each service has one response per member. Total awareness includes both aware categories.
+
+## R5 · Awareness and use (1 of 2)
+
+```{r}
+#| label: fig-service-1
+#| fig-cap: "Service awareness and use in questionnaire order."
+#| fig-width: 10
+#| fig-height: 4.5
+service_plot(services[1:7])
+```
+
+## R5 · Service frequencies (1 of 2)
+
+```{r}
+#| label: tbl-service-1
+#| tbl-cap: "Counts and valid percentages by service."
+kable(service_table(services[1:7]))
+```
+
+## R5 · Awareness and use (2 of 2)
+
+```{r}
+#| label: fig-service-2
+#| fig-cap: "Service awareness and use in questionnaire order."
+#| fig-width: 10
+#| fig-height: 4.5
+service_plot(services[8:14])
+```
+
+## R5 · Service frequencies (2 of 2)
+
+```{r}
+#| label: tbl-service-2
+#| tbl-cap: "Counts and valid percentages by service."
+kable(service_table(services[8:14]))
+```
+
+## R5 · Goodness of fit
+
+`r sum(vapply(gof[services], function(x) x$p.value < .05, TRUE))` of `r length(services)` services had response shares that differed from equal thirds at the item-level .05 threshold. The charts show which categories were most common.
+
+```{r}
+kable(gof_table(services[1:7]))
+```
+
+## R5 · Goodness of fit (continued)
+
+```{r}
+kable(gof_table(services[8:14]))
+```
+
+## R6 · Operational effectiveness
+
+**What are the members’ attitudes and beliefs about how effectively the credit union is operated?**
+
+- `r response_pct("q9", 3)` said statements came **About Right**.
+- `r response_pct("q10r", 3:4)` rated statement accuracy **Good** or **Excellent**. Higher q10r scores indicate better perceived accuracy.
+- `r response_pct("q11", 1)` found statements easy to understand, and `r response_pct("q12", 1)` said account information was kept confidential.
+
+## R6 · Statement delivery and accuracy
+
+:::: {.columns}
+::: {.column width="50%"}
+**q9 · Statement frequency** · valid n = `r dist$q9$Valid[1]`
+
+```{r}
+kable(display_freq("q9"))
+```
+
+:::
+::: {.column width="50%"}
+**q10r · Statement accuracy** · valid n = `r dist$q10r$Valid[1]`
+
+```{r}
+kable(display_freq("q10r"))
+```
+
+:::
+::::
+
+## R6 · Clarity and confidentiality
+
+:::: {.columns}
+::: {.column width="50%"}
+**q11 · Easy to understand** · valid n = `r dist$q11$Valid[1]`
+
+```{r}
+kable(display_freq("q11"))
+```
+
+:::
+::: {.column width="50%"}
+**q12 · Kept confidential** · valid n = `r dist$q12$Valid[1]`
+
+```{r}
+kable(display_freq("q12"))
+```
+
+:::
+::::
+
+## R6 · Goodness of fit
+
+```{r}
+#| label: tbl-operations-gof
+#| tbl-cap: "Response distributions versus equal category shares."
+kable(gof_table(categorical))
+```
+
+The test uses every substantive questionnaire category, including categories with zero responses. The reference is equal shares across five q9 categories, four q10r categories, or two Yes/No categories. See @tbl-operations-gof.
+
+## R6 · Operations and overall management
+
+```{r}
+#| label: tbl-operations-ratings
+#| tbl-cap: "Item-level ratings and two-sided one-sample tests."
+kable(rating_table(ratings[4:8]))
+```
+
+Higher q31–q34 ratings indicate stronger agreement. Higher q37r indicates a more favorable overall management and operations rating.
+
+All five means were above their respective scale references (each `r paste0("p ", pval(max(vapply(tests[ratings[4:8]], function(x) x$p.value, 0))))`).
+
+## R6 · What respondents reported
+
+- `r response_pct("q31", 4:5)` agreed or strongly agreed that personnel keep personal financial information confidential.
+- `r response_pct("q32", 4:5)` agreed or strongly agreed loan applications are processed promptly.
+- `r response_pct("q33", 4:5)` agreed or strongly agreed that services meet members’ needs.
+- `r response_pct("q34", 4:5)` agreed or strongly agreed that applications are simple to complete.
+- `r response_pct("q37r", 4:5)` rated overall operations **Good** or **Excellent**. See @tbl-operations-ratings for comparisons with the scale reference.
+
+## Overall findings
+
+- **R1.** The most common savings-rate rating was **Average**. Joining reasons require Q2.
+- **R2.** The rate items describe members’ perceptions of EFCU’s lending rates. The reasons for borrowing elsewhere require Q28 and Q29.
+- **R5.** Awareness and use varied by service. The largest gap was for `r paste(service_names[best(gap)], collapse = ", ")`.
+- **R6.** Statement accuracy was generally rated favorably, and the overall management and operations rating averaged `r mean_text("q37r")` on a five-point scale.
+
+## Limitations
+
+- Q2, Q28 and Q29 are absent from the Module 10 extract. The analysis follows the key’s rate measures while keeping the direct reasons unresolved.
+- The narrative describes 125 returns and two exclusions. The supplied extract has `r nrow(d)` records, and the case materials do not explain that difference.
+- Results describe reported views and use. The q30–q34 items measure separate perceptions. Test p-values are unadjusted and interpreted per item.
+
+## Appendix
+
+- [GitHub repository](https://github.com/hanamai111/case31)
+- [GitHub Pages presentation](https://hanamai111.github.io/case31/IC11-2-Case31-Data-Analysis-R1-R2-R5-R6-Han-Mai.html)
+- [IC10-2-1 data preparation](IC10-2-1-Data-Preparation-Case-31.html)
+- [IC10-2-2 analysis table](IC10-2-2-Data-Analysis-Table-Case-31.html)
+- [Case 31 questionnaire and coding exhibit](https://github.com/jaejungca/case31/blob/main/Case%2031%20-%20Employees%20Federal%20Credit%20Union.PDF)
+- [Workshop demonstration](https://www.youtube.com/watch?v=CKjH-nWKbFU&t=4432s)
+
