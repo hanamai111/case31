@@ -67,7 +67,13 @@ print(dim(raw))
 print(missing_counts[missing_counts > 0])
 ```
 
-The prior factor and reliability work supported averaging Q3–Q6. The four items share the same direction, and the complete-item mean exactly reproduces the supplied `Att_employee` field. The prior work supported retaining Q31–Q34 as separate items. The dataset already contains reversed statement, service-awareness, and overall-rating fields. Q9r is centered at “About right”; higher values indicate more frequent statements. Q10r and Q37r increase with more favorable ratings. For Q13r–Q26r, 1 is unaware, 2 is aware but unused, and 3 is aware and used. The key’s Q12rc corresponds to retaining only Q12’s labeled Yes/No values, because the supplied file has no separate Q12rc field. Missing responses are excluded per outcome. Seven overall ratings are missing in the supplied file.
+Questionnaire wording and coding were checked against the EFCU Member Opinion Survey (Case Exhibit 31.1) and its coding summary (Case Exhibit 31.2). The case narrative reports 125 returned questionnaires with two excluded. The course-supplied SPSS file contains 128 records, and all analysis denominators come from that file. The sources do not explain the discrepancy.
+
+The prior factor and reliability work supported averaging the four employee items: courtesy (Q3), helpfulness (Q4), professionalism (Q5), and always being available (Q6). Each uses the same agreement scale: 1 = Strongly disagree, 2 = Disagree, 3 = Uncertain, 4 = Agree, and 5 = Strongly agree. The complete-item mean exactly reproduces the supplied `Att_employee` field. Q31–Q34 use the same scale and remain separate based on the prior work.
+
+Q9r reverses the original statement-frequency codes, so 1 = Never and 5 = Too often, with 3 = About right. Q10r reverses the original accuracy codes, so 1 = Poor and 4 = Excellent. Q11 and Q12 use 1 = Yes and 2 = No. Exhibit 31.2 identifies Q12 code 3 as No answer. The key refers to Q12rc, which is absent from the supplied file, so the analysis excludes the 22 No answer responses from Q12 and uses the 106 valid Yes/No responses.
+
+For Q13r–Q26r, 1 = Unaware, 2 = Aware but unused, and 3 = Aware and used, reversing the raw questionnaire direction. Q37r puts Very poor at 1 and Excellent at 5, with Average at 3. The Q37 questionnaire calls its sixth option “No opinion,” and the coding exhibit calls code 6 “No answer.” SPSS labels code 6 “No Opinion.” The supplied file contains seven missing Q37/Q37r values and no observed code 6, so 121 substantive ratings enter the analysis. Exclusions apply only to the affected outcome.
 
 ```{r}
 #| label: helpers
@@ -263,7 +269,7 @@ nominal_results$Holm.p <- fmt_p(tail(r4c_holm, nrow(r4c_tests)))
 kable(nominal_results, digits = 3)
 ```
 
-Across the nine operational comparisons, `r sum(c(r4c_means$p, r4c_tests$Inference.p) < .05)` reached .05 individually and `r sum(r4c_holm < .05)` reached .05 after Holm adjustment. `r if (any(r4c_holm < .05)) paste("The adjusted comparisons with evidence of a difference were", paste(c(r4c_means$Item, r4c_tests$Item)[r4c_holm < .05], collapse = ", "), ".") else "The results provide insufficient evidence of systematic operational differences by residence."`
+Headquarters-area members expressed less agreement that loan applications were simple and easy to complete than members living elsewhere (Q34, means `r sprintf("%.2f vs. %.2f", r4c_means$HQ.mean[6], r4c_means$Elsewhere.mean[6])`). This was the only one of nine operational comparisons below .05 before correction (unadjusted p = `r fmt_p(r4c_means$p[6])`). After Holm adjustment (p = `r r4c_means$Holm.p[6]`), there was insufficient evidence of a residence difference on Q34 or any other operational item.
 
 # Overall summary
 
