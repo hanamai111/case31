@@ -1,0 +1,269 @@
+---
+title: "IC-Case 31: Reliability and Factor Analysis"
+subtitle: "Assessment of Multi-Item Scales for R3 and R6"
+author: "Han Mai"
+format:
+  html:
+    toc: true
+    embed-resources: true
+    code-fold: true
+    theme: default
+execute:
+  message: false
+---
+
+## Purpose
+
+This report assesses the dimensionality and internal consistency of two Employees Federal Credit Union (EFCU) survey scales and determines how to score them for the next stage of analysis. The substantive research questions are reserved for M13.
+
+## Data and coding
+
+```{r}
+#| label: data-audit
+stopifnot(requireNamespace("psych", quietly = TRUE))
+raw <- haven::read_sav("data/Case 31 Data_efcu_1.sav")
+r3_items <- paste0("q", 3:6)
+r6_items <- paste0("q", 31:34)
+items <- c(r3_items, r6_items)
+stopifnot(all(items %in% names(raw)))
+x <- as.data.frame(lapply(raw[items], as.numeric))
+stopifnot(all(vapply(x, function(y) all(na.omit(y) %in% 1:5), logical(1))))
+
+knitr::kable(data.frame(
+  Scale = rep(c("R3", "R6"), each = 4),
+  Item = toupper(items),
+  Content = c("Courtesy", "Helpfulness", "Professionalism", "Availability",
+              "Financial confidentiality", "Prompt loan processing",
+              "Services meet member needs", "Simple loan applications"),
+  Class = vapply(raw[items], function(y) class(y)[1], character(1)),
+  Observed = vapply(x, function(y) paste(sort(unique(na.omit(y))), collapse = ", "),
+                    character(1)),
+  Missing = colSums(is.na(x)),
+  row.names = NULL
+))
+```
+
+Re-render with Quarto and the R packages `haven`, `psych`, and `knitr` installed. The supplied SPSS file contains `r nrow(raw)` records. Exhibit 31.2 codes these positively worded items from 1 (strongly disagree) to 5 (strongly agree). The analysis uses their underlying numeric values and the original scoring direction. Each scale uses complete cases for its own items. All eight items are complete in this file. The [Case 31 narrative and questionnaire](https://github.com/jaejungca/case31/blob/main/Case%2031%20-%20Employees%20Federal%20Credit%20Union.PDF) describes 123 usable returns. The supplied file has no fieldwork identifiers to reconcile the difference, so all available records enter the analysis. The [instructor's Case 31 repository](https://github.com/jaejungca/case31) provides the data and attribution.
+
+## Method
+
+Common-factor EFA targets the variance that items share through a latent construct. PCA summarizes total observed variance. I treated the agreement scores as approximately metric, consistent with the assignment, and fitted maximum-likelihood common-factor models to Pearson correlations. This follows the EFA lecture's extraction method. Since responses are discrete and skew toward agreement, the ML exact-fit test serves as an approximate diagnostic. I checked KMO and Bartlett's test for factorability. For retention, I compared the Pearson scree and Kaiser rule with a common-factor parallel analysis based on squared multiple correlations as initial communalities. The parallel analysis compares observed reduced-matrix eigenvalues with the 95th percentiles from 1,000 independent column permutations, which preserve the original response distributions and break inter-item associations.
+
+I evaluated a single factor in each set. Rotation and cross-loadings become relevant when there are multiple identified factors. An unrestricted two-factor EFA with four items has negative degrees of freedom, so a two-factor rotated solution would require additional indicators or identifying constraints. Reliability uses raw and standardized Cronbach's alpha, corrected item-total correlations, and deletion diagnostics. The usual .70 guideline is a reference point for internal consistency. These separate models provide evidence about convergence within each scale. They leave discrimination between the two constructs untested.
+
+```{r}
+#| label: analysis-functions
+fmt <- function(x) formatC(x, digits = 3, format = "f")
+pval <- function(x) format.pval(x, digits = 3, eps = .001)
+
+reduced_eigen <- function(r) {
+  diag(r) <- 1 - 1 / diag(solve(r))
+  eigen(r, symmetric = TRUE, only.values = TRUE)$values
+}
+
+analyze_scale <- function(items, seed) {
+  dat <- x[items][complete.cases(x[items]), , drop = FALSE]
+  r <- cor(dat)
+  n <- nrow(dat)
+  upper <- upper.tri(r)
+  kmo <- psych::KMO(r)
+  bartlett <- psych::cortest.bartlett(r, n = n)
+
+  set.seed(seed)
+  random <- replicate(1000, reduced_eigen(cor(vapply(
+    dat, sample, numeric(n)
+  ))))
+  critical <- apply(random, 1, quantile, probs = .95)
+  observed <- reduced_eigen(r)
+  retained <- sum(cumprod(observed > critical))
+
+  fit <- factanal(dat, factors = 1, rotation = "none")
+  loading <- as.numeric(fit$loadings)
+  loading <- loading * sign(sum(loading))
+  residual <- r - tcrossprod(loading)
+  mean_r <- mean(r[upper])
+
+  alpha <- psych::alpha(dat, check.keys = FALSE)
+  reliability <- c(raw = alpha$total$raw_alpha,
+                   standardized = alpha$total$std.alpha)
+
+  list(n = n, r = r, msa = kmo$MSAi, kmo = kmo$MSA,
+       bartlett = bartlett$chisq, bartlett_df = bartlett$df,
+       bartlett_p = bartlett$p.value,
+       eigen = eigen(r, symmetric = TRUE, only.values = TRUE)$values,
+       observed = observed, critical = critical, retained = retained,
+       fit = fit, loading = setNames(loading, toupper(items)),
+       rmsr = sqrt(mean(residual[upper]^2)), mean_r = mean_r,
+       reliability = reliability, deletion = alpha$alpha.drop$raw_alpha,
+       item_total = alpha$item.stats$r.drop)
+}
+
+factorability <- function(s) {
+  knitr::kable(data.frame(
+    Item = toupper(rownames(s$r)),
+    round(s$r, 3),
+    "Item KMO" = fmt(s$msa),
+    check.names = FALSE,
+    row.names = NULL
+  ), col.names = c("Item", toupper(colnames(s$r)), "Item KMO"))
+}
+
+retention <- function(s) {
+  knitr::kable(data.frame(
+    Rank = seq_along(s$eigen),
+    "Pearson eigenvalue" = fmt(s$eigen),
+    "Common-factor eigenvalue" = fmt(s$observed),
+    "Parallel 95th percentile" = fmt(s$critical),
+    check.names = FALSE
+  ))
+}
+
+scree <- function(s) {
+  old <- par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
+  on.exit(par(old))
+  plot(s$eigen, type = "b", pch = 19, xlab = "Rank", ylab = "Eigenvalue",
+       main = "Pearson scree", xaxt = "n", col = "#15556B")
+  axis(1, at = seq_along(s$eigen))
+  abline(h = 1, col = "gray45", lty = 2)
+  plot(s$observed, type = "b", pch = 19, xlab = "Rank", ylab = "Eigenvalue",
+       main = "Common-factor parallel analysis", xaxt = "n",
+       ylim = range(s$observed, s$critical), col = "#15556B")
+  axis(1, at = seq_along(s$eigen))
+  lines(s$critical, type = "b", lty = 2, pch = 1, col = "#A44823")
+  legend("topright", c("Observed", "Permutation 95th percentile"),
+         col = c("#15556B", "#A44823"), lty = 1:2, pch = c(19, 1),
+         bty = "n", cex = .76)
+}
+
+loadings_table <- function(s) {
+  knitr::kable(data.frame(
+    Item = names(s$loading), Loading = fmt(s$loading),
+    Communality = fmt(1 - s$fit$uniquenesses), Uniqueness = fmt(s$fit$uniquenesses)
+  ), row.names = FALSE)
+}
+
+alpha_table <- function(s) {
+  knitr::kable(data.frame(
+    Item = names(s$loading),
+    "Corrected item-total r" = fmt(s$item_total),
+    "Raw alpha if deleted" = fmt(s$deletion),
+    check.names = FALSE
+  ))
+}
+
+r3 <- analyze_scale(r3_items, seed = 31)
+r6 <- analyze_scale(r6_items, seed = 31)
+```
+
+## R3 factor analysis
+
+```{r}
+#| label: r3-factorability
+factorability(r3)
+```
+
+All pairwise correlations are positive and moderately strong or stronger. Overall KMO is **`r fmt(r3$kmo)`** and Bartlett's test rejects an identity correlation matrix, χ²(`r r3$bartlett_df`) = `r fmt(r3$bartlett)`, p `r if (r3$bartlett_p < .001) "< .001" else paste("=", pval(r3$bartlett_p))` (n = `r r3$n`). These diagnostics support factor analysis.
+
+```{r}
+#| label: r3-retention
+#| fig-width: 9
+#| fig-height: 3.7
+retention(r3)
+scree(r3)
+```
+
+The scree drops sharply after the first eigenvalue. One Pearson eigenvalue clears 1, and parallel analysis retains **`r r3$retained` factor**. The four employee items also have a common theoretical focus, which supports fitting a one-factor solution.
+
+```{r}
+#| label: r3-loadings
+loadings_table(r3)
+```
+
+All four items load strongly and positively. Helpfulness (Q4) has the strongest loading, and even the weakest item, availability (Q6), has substantial common variance. The root mean square of the off-diagonal correlation residuals (RMSR) is `r fmt(r3$rmsr)`. The approximate ML exact-fit test rejects the one-factor model, χ²(`r r3$fit$dof`) = `r fmt(r3$fit$STATISTIC)`, p = `r pval(r3$fit$PVAL)`. The first factor captures most of the shared structure, with some residual associations that the one-factor model leaves unexplained. This supports practical convergence with a qualification about fit.
+
+## R3 reliability analysis
+
+For the `r length(r3_items)` items, raw α is **`r fmt(r3$reliability["raw"])`**, standardized α is `r fmt(r3$reliability["standardized"])`, and mean inter-item r is `r fmt(r3$mean_r)`. Internal consistency is good for a four-item score.
+
+```{r}
+#| label: r3-reliability
+alpha_table(r3)
+```
+
+Deleting any item lowers alpha. All corrected item-total correlations are positive and substantial, and the items cover distinct aspects of staff proficiency. Keep all four.
+
+## R3 composite-scale decision
+
+**Yes, with qualification.** Use the mean of Q3–Q6 as an employee proficiency index. Parallel analysis, strong loadings, and internal consistency support a practical summary. Report the exact-fit limitation when interpreting the index. Score only records with all four items, which are available for every record in this file.
+
+```{r}
+#| label: compute-r3
+analysis_data <- data.frame(
+  x,
+  employee_proficiency_index = rowMeans(x[r3_items], na.rm = FALSE)
+)
+```
+
+## R6 factor analysis
+
+```{r}
+#| label: r6-factorability
+factorability(r6)
+```
+
+Correlations are uneven. Q32 is the most connected item, while some other pairs have very little association. Overall KMO is **`r fmt(r6$kmo)`**, indicating weak factorability. Bartlett's test rejects an identity matrix, χ²(`r r6$bartlett_df`) = `r fmt(r6$bartlett)`, p `r if (r6$bartlett_p < .001) "< .001" else paste("=", pval(r6$bartlett_p))` (n = `r r6$n`). The test indicates that some correlations exist. KMO and the pattern of correlations raise doubts about a well-measured shared factor.
+
+```{r}
+#| label: r6-retention
+#| fig-width: 9
+#| fig-height: 3.7
+retention(r6)
+scree(r6)
+```
+
+Two Pearson eigenvalues exceed 1, with the second only slightly above the cutoff. The scree has a modest first drop and offers weaker evidence than R3. Common-factor parallel analysis suggests **`r r6$retained` factor**. A single-factor model provides a diagnostic of how well the proposed operational effectiveness construct is represented.
+
+```{r}
+#| label: r6-loadings
+loadings_table(r6)
+```
+
+Q32 (prompt processing) dominates. Its uniqueness reaches the default ML lower bound of `r fmt(r6$fit$uniquenesses["q32"])`, indicating a boundary solution. Using .30 as a discussion threshold, Q31 and Q33 load weakly, and Q34 is modest. Most variance in each of those three items remains item-specific or unexplained by the common factor. RMSR is `r fmt(r6$rmsr)`, and the approximate ML exact-fit statistic is χ²(`r r6$fit$dof`) = `r fmt(r6$fit$STATISTIC)`, p = `r pval(r6$fit$PVAL)`. Treat that p-value cautiously given the boundary estimate. The uneven loadings and weak factorability provide limited evidence of convergence across the four items.
+
+## R6 reliability analysis
+
+For the `r length(r6_items)` items, raw α is **`r fmt(r6$reliability["raw"])`**, standardized α is `r fmt(r6$reliability["standardized"])`, and mean inter-item r is `r fmt(r6$mean_r)`. The four items provide weak internal consistency.
+
+```{r}
+#| label: r6-reliability
+alpha_table(r6)
+```
+
+Dropping Q33 produces a negligible increase in alpha, and deleting Q32 substantially lowers it. Confidentiality, processing speed, services meeting member needs, and application simplicity each carry distinct content. The deletion diagnostics provide little basis for a shorter score. Keep each item available individually.
+
+## R6 composite-scale decision
+
+**No.** The weak KMO, uneven loadings and communalities, Q32's boundary estimate, and low alpha weigh against averaging Q31–Q34. Use the four items individually when analyzing operational effectiveness in M13.
+
+## Summary and next steps
+
+```{r}
+#| label: measurement-summary
+knitr::kable(data.frame(
+  Scale = c("R3", "R6"),
+  Items = c("Q3–Q6", "Q31–Q34"),
+  Factors = c(paste(r3$retained, "retained"), "1 fitted for diagnosis"),
+  "Key loading result" = c("Four strong positive loadings", "Q32 dominates"),
+  "Raw α" = fmt(c(r3$reliability["raw"], r6$reliability["raw"])),
+  "Composite decision" = c("Yes, with qualification", "No"),
+  check.names = FALSE
+))
+```
+
+Carry the R3 index and the separate R6 indicators into M13. Both analyses retain the original response coding, and neither drops an item from the source data.
+
+## Appendix
+
+- [GitHub Repository](https://github.com/hanamai111/case31)
+- [GitHub Pages](https://hanamai111.github.io/case31/IC-Case-31-Reliability-and-Factor-Analysis-Han-Mai.html)
+
