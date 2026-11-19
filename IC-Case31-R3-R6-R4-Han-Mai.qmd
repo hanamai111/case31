@@ -1,0 +1,279 @@
+---
+title: "IC Case 31 – Summary of Data Analysis for R3, R6, and R4"
+subtitle: "Employees Federal Credit Union"
+author: "Han Mai"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+    code-overflow: wrap
+execute:
+  echo: true
+  message: false
+---
+
+# Overview
+
+This report summarizes members’ views of employee proficiency and credit union operations, then compares members living in the headquarters area with members living elsewhere.
+
+# Data and preparation
+
+```{r}
+#| label: setup
+library(haven)
+library(knitr)
+
+filename <- "Case 31 Data_efcu_4.sav"
+paths <- c(file.path("data", filename), filename, file.path("~/Downloads", filename))
+path <- paths[file.exists(paths)][1]
+stopifnot(!is.na(path))
+raw <- read_sav(path, user_na = TRUE)
+dat <- zap_missing(raw)
+
+staff_items <- paste0("q", 3:6)
+services <- paste0("q", 13:26, "_r")
+ratings <- c("q31", "q32", "q33", "q34", "Q37_r")
+categories <- c("q9_r", "q10_r", "q11", "q12")
+items <- c(staff_items, services, ratings, categories, "q38")
+stopifnot(all(items %in% names(dat)))
+stopifnot(all(dat$q12 %in% c(1, 2, 3, NA)))
+dat$q12[dat$q12 == 3 & !is.na(dat$q12)] <- NA
+dat$staff <- rowMeans(as.data.frame(dat[staff_items]), na.rm = FALSE)
+stopifnot(isTRUE(all.equal(dat$staff, as.numeric(dat$Att_employee))))
+dat$residence <- factor(dat$q38, levels = 1:2,
+                        labels = c("Headquarters area", "Elsewhere"))
+service_names <- vapply(paste0("q", 13:26), function(v) {
+  sub("^Q[0-9]+-Aware_", "", attr(raw[[v]], "label"))
+}, character(1))
+labels <- c(
+  q9_r = "Statement frequency", q10_r = "Statement accuracy",
+  q11 = "Statements easy to understand", q12 = "Accounts kept confidential",
+  q31 = "Personnel keep financial information confidential",
+  q32 = "Prompt loan application processing", q33 = "Services meet member needs",
+  q34 = "Loan applications simple to complete", Q37_r = "Overall management and operations"
+)
+labels <- c(labels, setNames(service_names, services))
+response_labels <- list(
+  q9_r = c("Never", "Not often enough", "About right", "Very often", "Too often"),
+  q10_r = c("Poor", "Fair", "Good", "Excellent"),
+  q11 = c("Yes", "No"), q12 = c("Yes", "No")
+)
+for (v in services) {
+  response_labels[[v]] <- c("Unaware", "Aware, unused", "Aware and used")
+}
+missing_counts <- colSums(is.na(dat[items]))
+print(dim(raw))
+print(missing_counts[missing_counts > 0])
+```
+
+The prior factor and reliability work supported averaging Q3–Q6. The four items share the same direction, and the complete-item mean exactly reproduces the supplied `Att_employee` field. The prior work supported retaining Q31–Q34 as separate items. The dataset already contains reversed statement, service-awareness, and overall-rating fields. Q9r is centered at “About right”; higher values indicate more frequent statements. Q10r and Q37r increase with more favorable ratings. For Q13r–Q26r, 1 is unaware, 2 is aware but unused, and 3 is aware and used. The key’s Q12rc corresponds to retaining only Q12’s labeled Yes/No values, because the supplied file has no separate Q12rc field. Missing responses are excluded per outcome. Seven overall ratings are missing in the supplied file.
+
+```{r}
+#| label: helpers
+fmt_p <- function(p) ifelse(p < .001, "< .001", sub("^0", "", sprintf("%.3f", p)))
+describe <- function(x) c(N = sum(!is.na(x)), Mean = mean(x, na.rm = TRUE),
+                          SD = sd(x, na.rm = TRUE))
+tt <- function(test) {
+  c(t = unname(test$statistic), df = unname(test$parameter),
+    lower = test$conf.int[1], upper = test$conf.int[2], p = test$p.value)
+}
+format_results <- function(results) {
+  results$p <- fmt_p(results$p)
+  results
+}
+ranges <- function(x, v) {
+  f <- factor(x, levels = seq_along(response_labels[[v]]),
+              labels = response_labels[[v]])
+  table(f)
+}
+freqs <- function(v) {
+  counts <- ranges(dat[[v]], v)
+  data.frame(Item = labels[[v]], Response = names(counts),
+             N = as.integer(counts), Percent = as.numeric(100 * prop.table(counts)))
+}
+```
+
+# R3 — Employee proficiency
+
+**What are the members’ attitudes and beliefs about the proficiencies of credit union employees?**
+
+## Descriptive statistics
+
+```{r}
+#| label: tbl-r3-descriptive
+#| tbl-cap: "Employee proficiency index"
+kable(as.data.frame(t(describe(dat$staff))), digits = 2)
+```
+
+## One-sample t-test
+
+The key specifies a one-sample t-test. The primary benchmark is 3 (“Uncertain”). A supplementary comparison with 4 (“Agree”) follows the lecture demonstration. Both are two-sided comparisons; the intervals below estimate the mean.
+
+```{r}
+#| label: tbl-r3-test
+#| tbl-cap: "Employee proficiency compared with agreement-scale benchmarks"
+r3 <- as.data.frame(t(vapply(c(3, 4), function(mu) tt(t.test(dat$staff, mu = mu)),
+                             numeric(5))))
+r3 <- cbind(Benchmark = c(3, 4), r3)
+kable(format_results(r3), digits = 3)
+```
+
+Members rated employee proficiency favorably. The average was `r sprintf("%.2f", mean(dat$staff))`, above both the uncertain and agree benchmarks (both `r if (all(r3$p < .001)) "p < .001" else paste("p values", paste(fmt_p(r3$p), collapse = ", "))`; @tbl-r3-test).
+
+# R6 — Operational effectiveness
+
+**What are the members’ attitudes and beliefs about how effectively the credit union is operated?**
+
+## Descriptive statistics
+
+```{r}
+#| label: tbl-r6-frequencies
+#| tbl-cap: "Statement and account responses, by item"
+kable(do.call(rbind, lapply(categories, freqs)), digits = 1)
+```
+
+```{r}
+#| label: tbl-r6-ratings
+#| tbl-cap: "Agreement and overall operations ratings"
+r6_desc <- as.data.frame(t(vapply(dat[ratings], describe, numeric(3))))
+kable(cbind(Item = unname(labels[ratings]), r6_desc), digits = 2, row.names = FALSE)
+```
+
+## Chi-square goodness of fit and one-sample t-tests
+
+The key specifies chi-square goodness of fit for Q9r, Q10r, Q11 and Q12rc without giving expected proportions. I use equal probabilities across each item’s questionnaire-defined substantive categories, including categories that received zero responses. This benchmark tests whether responses concentrate in particular categories. The one-sample tests use 3, meaning “Uncertain” for Q31–Q34 and “Average” for Q37r. The intervals estimate item means.
+
+```{r}
+#| label: tbl-r6-tests
+#| tbl-cap: "Goodness-of-fit and benchmark comparisons for operational effectiveness"
+gof <- do.call(rbind, lapply(categories, function(v) {
+  counts <- ranges(dat[[v]], v)
+  test <- chisq.test(counts)
+  data.frame(Item = labels[[v]], N = sum(counts), Chi.square = unname(test$statistic),
+             df = unname(test$parameter), p = test$p.value)
+}))
+r6 <- as.data.frame(t(vapply(dat[ratings], function(x) tt(t.test(x, mu = 3)),
+                             numeric(5))))
+kable(format_results(gof), digits = 3)
+kable(format_results(cbind(Item = unname(labels[ratings]), r6)),
+      digits = 3, row.names = FALSE)
+```
+
+Most members described statement frequency as about right (`r sum(dat$q9_r == 3)` of `r sum(!is.na(dat$q9_r))`) and rated statement accuracy as good or excellent (`r sum(dat$q10_r >= 3)` of `r sum(!is.na(dat$q10_r))`). Statements were easy to understand for `r sum(dat$q11 == 1)` members, and `r sum(dat$q12 == 1, na.rm = TRUE)` of the `r sum(!is.na(dat$q12))` members who answered the account-confidentiality item said yes. The agreement and overall-rating means were above their scale benchmarks (all `r if (all(r6$p < .001)) "p < .001" else paste("p values", paste(fmt_p(r6$p), collapse = ", "))`). Agreement was strongest for financial-information confidentiality. Application simplicity and how well services meet members’ needs drew more qualified ratings (@tbl-r6-ratings).
+
+# R4 — Differences by residence
+
+**Are there any perceived differences on (a) attitude towards employee proficiencies, (b) awareness of services, and (c) operational effectiveness between members who live in the area of the firm’s headquarters and members who live elsewhere?**
+
+Q38 identifies two separate groups. Welch’s independent-samples t-tests estimate headquarters area minus elsewhere, with 95% confidence intervals. For categorical comparisons I report Pearson’s chi-square statistic, expected counts, and p-value. When any expected count is below five, I also report a Fisher exact p-value and use it for interpretation. The tables show outcome-specific available cases. The tests within each set are exploratory and Holm-adjusted p-values are provided alongside individual p-values.
+
+```{r}
+#| label: comparison-code
+compare_means <- function(v, label) {
+  groups <- split(dat[[v]], dat$residence)
+  hq <- groups[[1]]
+  elsewhere <- groups[[2]]
+  d1 <- describe(hq)
+  d2 <- describe(elsewhere)
+  est <- tt(t.test(hq, elsewhere))
+  data.frame(Item = label, HQ.n = d1[1], HQ.mean = d1[2], HQ.SD = d1[3],
+             Elsewhere.n = d2[1], Elsewhere.mean = d2[2], Elsewhere.SD = d2[3],
+             Difference = unname(d1[2] - d2[2]), as.list(est), row.names = NULL)
+}
+compare_categories <- function(v) {
+  response <- factor(dat[[v]], levels = seq_along(response_labels[[v]]),
+                     labels = response_labels[[v]])
+  counts <- table(response, dat$residence)
+  shares <- prop.table(counts, margin = 2)
+  active <- counts[rowSums(counts) > 0, , drop = FALSE]
+  test <- suppressWarnings(chisq.test(active, correct = FALSE))
+  min_e <- min(test$expected)
+  exact <- if (min_e < 5) fisher.test(active)$p.value else NA_real_
+  list(
+    frequencies = data.frame(Item = labels[[v]], Response = rownames(counts),
+      HQ = sprintf("%d (%.1f%%)", counts[, 1], shares[, 1] * 100),
+      Elsewhere = sprintf("%d (%.1f%%)", counts[, 2], shares[, 2] * 100),
+      row.names = NULL),
+    result = data.frame(Item = labels[[v]], HQ.n = sum(counts[, 1]),
+      Elsewhere.n = sum(counts[, 2]), Chi.square = unname(test$statistic),
+      df = unname(test$parameter), Min.expected = min_e, p = test$p.value,
+      Fisher.p = exact, Inference.p = ifelse(is.na(exact), test$p.value, exact))
+  )
+}
+format_categorical <- function(results) {
+  results$Holm.p <- fmt_p(p.adjust(results$Inference.p, method = "holm"))
+  results$Fisher.p <- ifelse(is.na(results$Fisher.p), "—", fmt_p(results$Fisher.p))
+  format_results(results[setdiff(names(results), "Inference.p")])
+}
+```
+
+## R4a — Employee proficiency, independent-samples t-test
+
+```{r}
+#| label: tbl-r4a
+#| tbl-cap: "Employee proficiency by residence"
+r4a <- compare_means("staff", "Employee proficiency")
+kable(format_results(r4a), digits = 3)
+```
+
+The headquarters-area sample rated employees slightly higher. The estimated difference was `r sprintf("%.2f", r4a$Difference)` points (95% CI `r sprintf("%.2f to %.2f", r4a$lower, r4a$upper)`, p = `r fmt_p(r4a$p)`). The data provide insufficient evidence of a residence difference in employee proficiency.
+
+## R4b — Service awareness, cross-tabulations and chi-square
+
+```{r}
+#| label: tbl-r4b-counts
+#| tbl-cap: "Service-awareness cross-tabulations with within-residence percentages"
+r4b <- lapply(services, compare_categories)
+kable(do.call(rbind, lapply(r4b, "[[", "frequencies")))
+```
+
+```{r}
+#| label: tbl-r4b-tests
+#| tbl-cap: "Service-awareness independence tests"
+r4b_tests <- do.call(rbind, lapply(r4b, "[[", "result"))
+kable(format_categorical(r4b_tests), digits = 3)
+```
+
+For line-of-credit loans neither group used the “Unaware” category. Its zero-total row remains visible in the descriptive table and is excluded from the test. Across the 14 comparisons, `r sum(r4b_tests$Inference.p < .05)` reached .05 individually and `r sum(p.adjust(r4b_tests$Inference.p, "holm") < .05)` reached .05 after Holm adjustment. The tables show where usage and awareness differed descriptively.
+
+## R4c — Operational effectiveness, independent-samples t-tests and chi-square
+
+The current key treats both Q9r and Q10r as interval for R4c. I use their supplied recodes and show their response distributions above for context. The nominal items Q11 and Q12 use cross-tabulations and chi-square.
+
+```{r}
+#| label: tbl-r4c-means
+#| tbl-cap: "Operational ratings by residence"
+r4c_means <- do.call(rbind, lapply(c(categories[1:2], ratings), function(v) {
+  compare_means(v, labels[[v]])
+}))
+r4c_cat <- lapply(categories[3:4], compare_categories)
+r4c_tests <- do.call(rbind, lapply(r4c_cat, "[[", "result"))
+r4c_holm <- p.adjust(c(r4c_means$p, r4c_tests$Inference.p), method = "holm")
+r4c_means$Holm.p <- fmt_p(head(r4c_holm, nrow(r4c_means)))
+kable(format_results(r4c_means), digits = 3)
+```
+
+```{r}
+#| label: tbl-r4c-categorical
+#| tbl-cap: "Statement understandability and account confidentiality by residence"
+kable(do.call(rbind, lapply(r4c_cat, "[[", "frequencies")))
+nominal_results <- format_categorical(r4c_tests)
+nominal_results$Holm.p <- fmt_p(tail(r4c_holm, nrow(r4c_tests)))
+kable(nominal_results, digits = 3)
+```
+
+Across the nine operational comparisons, `r sum(c(r4c_means$p, r4c_tests$Inference.p) < .05)` reached .05 individually and `r sum(r4c_holm < .05)` reached .05 after Holm adjustment. `r if (any(r4c_holm < .05)) paste("The adjusted comparisons with evidence of a difference were", paste(c(r4c_means$Item, r4c_tests$Item)[r4c_holm < .05], collapse = ", "), ".") else "The results provide insufficient evidence of systematic operational differences by residence."`
+
+# Overall summary
+
+Members generally viewed employees and day-to-day operations favorably. The residence analyses evaluate whether these views and service awareness vary across locations. They describe survey associations. The one-way ANOVA in the analysis key applies to H1, outside the R3, R6 and R4 scope.
+
+# Appendix
+
+## Project links
+
+- [GitHub Repository](https://github.com/hanamai111/case31)
+- [GitHub Pages](https://hanamai111.github.io/case31/IC-Case31-R3-R6-R4-Han-Mai.html)
+
+The QMD can be rendered with the course-provided `Case 31 Data_efcu_4.sav` in the project’s `data/` folder, alongside the QMD, or in Downloads.
