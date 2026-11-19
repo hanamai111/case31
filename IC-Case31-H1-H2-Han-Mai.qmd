@@ -1,0 +1,187 @@
+---
+title: "IC Case 31 – Summary of Data Analysis for H1 and H2"
+subtitle: "Employees Federal Credit Union"
+author: "Han Mai"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+    code-fold: false
+    code-overflow: wrap
+execute:
+  echo: true
+  message: false
+---
+
+# Overview
+
+H1 examines whether ratings of how well the credit union meets members’ financial needs differ across regular share account awareness and use groups. H2 compares each respondent’s two loan-rate ratings. The [Step 3-2 assignment](https://canvas.cpp.edu/courses/143274/pages/step-3-2-work-on-ic-case-31-summary-of-data-analysis-for-h1-h2-assigned-and-submit-the-deliverables-below-by-the-deadline?module_item_id=5422958) specifies one-way ANOVA and a paired-samples t-test, respectively.
+
+# Data and preparation
+
+The hypothesis wording and variable mapping follow the [analysis key linked from Step 3-2](https://livecsupomona-my.sharepoint.com/:w:/g/personal/jmjung_cpp_edu/IQCfJSZJmOqzR5y88X995SIHAaWftxwLcmRaIAX40FRzUNk?e=1d0y3g). Item meanings and codes were checked against the EFCU Member Opinion Survey and its coding summary (Exhibits 31.1 and 31.2) and the supplied SPSS file. The case narrative reports 125 returns with two excluded, while the course file contains 128 records. Analysis denominators use the course file.
+
+| Item | Questionnaire measure | Codes used |
+|---|---|---|
+| Q13r | Regular share account awareness and use | 1 = Unaware, 2 = Aware but have not used, 3 = Aware and have used. The original questionnaire reverses codes 1 and 3. |
+| Q33 | Agreement that current financial services meet members’ needs | 1 = Strongly disagree through 5 = Strongly agree. 3 = Uncertain. |
+| Q8r | Opinion of the rates the credit union charges members to borrow funds | The supplied recode runs from 1 = Very low to 5 = Very high. 3 = Average. Raw Q8 runs in the opposite direction and reserves code 6 for No opinion. |
+| Q30 | Agreement that the credit union’s loan rates are lower than rates offered by other institutions | 1 = Strongly disagree through 5 = Strongly agree. 3 = Uncertain. |
+
+```{r}
+library(haven)
+library(knitr)
+
+filename <- "Case 31 Data_efcu_4.sav"
+paths <- c(file.path("data", filename), filename, file.path("~/Downloads", filename))
+path <- paths[file.exists(paths)][1]
+stopifnot(!is.na(path))
+raw <- read_sav(path, user_na = TRUE)
+case31 <- zap_missing(raw)
+dim(case31)
+
+items <- c("q13", "q13_r", "q33", "q8", "Q8_r", "q30")
+stopifnot(all(items %in% names(case31)))
+numeric_items <- lapply(case31[items], as.numeric)
+expected_q8r <- ifelse(numeric_items$q8 %in% 1:5, 6 - numeric_items$q8, NA_real_)
+stopifnot(
+  identical(numeric_items$q13_r, 4 - numeric_items$q13),
+  identical(numeric_items$Q8_r, expected_q8r),
+  all(numeric_items$q33 %in% c(1:5, NA)),
+  all(numeric_items$q30 %in% c(1:5, NA))
+)
+fmt_p <- function(p) ifelse(p < .001, "< .001", sub("^0", "", sprintf("%.3f", p)))
+describe <- function(x) c(n = length(x), Mean = mean(x), SD = sd(x))
+```
+
+# H1 — Members’ awareness of the regular share accounts will influence their opinions on how well the current financial services provided by the credit union meet their needs.
+
+## Analysis approach
+
+Each respondent belongs to one of three independent regular share account awareness and use groups (Q13r). The outcome is the Q33 agreement rating, treated as approximately metric as specified by the key. A one-way ANOVA compares the three group means. The survey supports an association interpretation.
+
+## Descriptive statistics
+
+```{r}
+#| label: tbl-h1-descriptives
+#| tbl-cap: "Agreement that services meet members’ needs, by share account awareness"
+h1 <- data.frame(
+  q13_r = factor(numeric_items$q13_r, levels = 1:3,
+    labels = c("Unaware", "Aware but have not used", "Aware and have used")),
+  q33 = numeric_items$q33
+)
+h1 <- h1[complete.cases(h1), ]
+h1_stats <- t(vapply(split(h1$q33, h1$q13_r), describe, numeric(3)))
+kable(data.frame(Group = rownames(h1_stats), h1_stats, row.names = NULL), digits = 2)
+```
+
+## One-way ANOVA
+
+Each record contributes one rating to one group. The group counts and residual Q–Q plot show the implications of the bounded five-point response scale, especially for the smallest group. The median-centered Levene check compares absolute deviations from group medians.
+
+```{r}
+#| label: fig-h1-residuals
+#| fig-cap: "Q–Q plot of H1 ANOVA residuals"
+#| fig-width: 5
+#| fig-height: 3.4
+h1_model <- aov(q33 ~ q13_r, data = h1)
+qqnorm(residuals(h1_model), main = "")
+qqline(residuals(h1_model))
+```
+
+```{r}
+#| label: tbl-h1-anova
+#| tbl-cap: "One-way ANOVA for Q33 by regular share account awareness and use"
+deviation <- abs(h1$q33 - ave(h1$q33, h1$q13_r, FUN = median))
+levene <- oneway.test(deviation ~ q13_r, data = h1, var.equal = TRUE)
+anova_out <- summary(h1_model)[[1]]
+eta2 <- anova_out[1, "Sum Sq"] / sum(anova_out[, "Sum Sq"])
+kable(data.frame(F = anova_out[1, "F value"], df1 = anova_out[1, "Df"],
+  df2 = anova_out[2, "Df"], p = fmt_p(anova_out[1, "Pr(>F)"]), Eta.squared = eta2),
+  digits = 3)
+```
+
+The discrete ratings produce steps in the residual plot. Group SDs are similar, and the median-centered Levene check gives little evidence of unequal variances (*p* = `r fmt_p(levene$p.value)`).
+
+## Post-hoc analysis
+
+The omnibus result reached .05. Tukey HSD compares all three pairs with familywise adjustment.
+
+```{r}
+#| label: tbl-h1-tukey
+#| tbl-cap: "Tukey HSD comparisons for H1 with familywise 95% confidence intervals"
+tukey <- TukeyHSD(h1_model, "q13_r")$q13_r
+kable(data.frame(Comparison = rownames(tukey), Difference = tukey[, "diff"],
+  Lower = tukey[, "lwr"], Upper = tukey[, "upr"],
+  Adjusted.p = fmt_p(tukey[, "p adj"]), row.names = NULL), digits = 3)
+```
+
+## Interpretation
+
+Members aware of regular share accounts who had already used them gave lower average ratings of how well financial services meet members’ needs than unaware members (*p* = `r fmt_p(tukey[2, "p adj"])`) and aware members who had never used them (*p* = `r fmt_p(tukey[3, "p adj"])`). The latter two groups had insufficient evidence of a difference (*p* = `r fmt_p(tukey[1, "p adj"])`). Awareness and use status accounted for about `r sprintf("%.1f%%", 100 * eta2)` of the observed sample variation in Q33 scores.
+
+# H2 — Members will not be different in their opinion on CU’s loan rate (Q8r) and the degree to which they agree that CU’s loan rate is lower than competitors (Q30).
+
+## Analysis approach
+
+The same respondents answered both items, so a paired t-test evaluates the within-person difference **Q8r minus Q30** against zero using a two-sided alternative. The official key specifies these two scores as supplied. Higher Q8r means higher perceived rates, while higher Q30 means stronger agreement that the credit union’s rates are lower than competitors’. The test compares numeric scores on the two course-specified scales. Its result alone cannot establish that the scales measure the same attitude or that the two items are equivalent.
+
+## Descriptive statistics
+
+```{r}
+#| label: tbl-h2-descriptives
+#| tbl-cap: "Loan-rate ratings and differences among complete pairs"
+h2 <- data.frame(Q8_r = numeric_items$Q8_r, q30 = numeric_items$q30)
+h2 <- h2[complete.cases(h2), ]
+h2$difference <- h2$Q8_r - h2$q30
+h2_stats <- t(vapply(h2, describe, numeric(3)))
+kable(data.frame(Measure = c("Q8r: perceived level of rates",
+  "Q30: agreement that rates are lower than competitors", "Q8r minus Q30"),
+  h2_stats, row.names = NULL), digits = 2)
+```
+
+H1 used all `r nrow(h1)` records. H2 excluded `r nrow(case31) - nrow(h2)` records with missing Q8/Q8r, leaving `r nrow(h2)` complete pairs. Q8 code 6 is reserved for “No opinion” in the coding guide. The cleaned file has no observed code-6 values, so it does not establish why each of the missing Q8 ratings is absent.
+
+## Paired-samples t-test
+
+The paired differences are discrete and mostly centered around zero. The plot shows their tails and any asymmetry. All observed complete pairs enter the test.
+
+```{r}
+#| label: fig-h2-differences
+#| fig-cap: "Distribution of Q8r minus Q30 among complete pairs"
+#| fig-width: 5
+#| fig-height: 3.4
+hist(h2$difference, breaks = seq(-4.5, 4.5, by = 1),
+  xlab = "Q8r minus Q30", main = "", col = "#34798A", border = "white")
+```
+
+```{r}
+#| label: tbl-h2-test
+#| tbl-cap: "Two-sided paired t-test with a 95% confidence interval for the mean difference"
+h2_test <- t.test(h2$Q8_r, h2$q30, paired = TRUE,
+  alternative = "two.sided", conf.level = .95)
+dz <- mean(h2$difference) / sd(h2$difference)
+kable(data.frame(n = nrow(h2), Difference = unname(h2_test$estimate),
+  t = unname(h2_test$statistic), df = unname(h2_test$parameter),
+  p = fmt_p(h2_test$p.value), Lower = h2_test$conf.int[1],
+  Upper = h2_test$conf.int[2], Paired.dz = dz), digits = 3)
+```
+
+## Interpretation
+
+The average Q8r score was `r sprintf("%.2f", mean(h2$difference))` points higher than Q30. The confidence interval includes zero (*p* = `r fmt_p(h2_test$p.value)`), so the data provide insufficient evidence of a difference between the mean coded ratings.
+
+# Overall summary
+
+Members who had used regular share accounts reported less agreement that the credit union’s financial services meet member needs. The two paired loan-rate ratings showed insufficient evidence of a mean score difference.
+
+# Appendix
+
+## GitHub Repository
+
+[Case 31 repository](https://github.com/hanamai111/case31)
+
+## GitHub Pages
+
+[Published H1 and H2 report](https://hanamai111.github.io/case31/IC-Case31-H1-H2-Han-Mai.html)
