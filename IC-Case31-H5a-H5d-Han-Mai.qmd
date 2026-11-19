@@ -1,0 +1,220 @@
+---
+title: "IC Case 31 – Summary of Data Analysis for H5a–H5d"
+subtitle: "Multiple Regression Analysis – Employees Federal Credit Union"
+author: "Han Mai"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+    code-overflow: wrap
+execute:
+  echo: true
+  message: false
+---
+
+## Overview
+
+This report tests four positive associations with members’ overall ratings of credit union management and operations. The analysis follows [M14 Step 3](https://canvas.cpp.edu/courses/143274/pages/step-3-work-on-ic-case-31-summary-of-data-analysis-for-h5a-h5d-and-submit-the-deliverables?module_item_id=5422967) and the [official Hypotheses key](https://livecsupomona-my.sharepoint.com/:w:/g/personal/jmjung_cpp_edu/IQCCr7tzz2ZGQLeHVkV3vCqaAbAYqJVfWZD9TPNjHapP4Bw?e=B3jDOk).
+
+## Data and preparation
+
+| Role | Item | Questionnaire measure |
+|---|---|---|
+| Outcome | Q37, supplied as Q37r | Overall rating of how the credit union is managed and operated |
+| H5a | Q31 | Belief that personnel will keep personal financial information confidential |
+| H5b | Q32 | Agreement that the credit union processes loan applications promptly |
+| H5c | Q33 | Agreement that current financial services meet members’ needs |
+| H5d | Q34 | Agreement that loan applications are simple and easy to complete |
+
+Exhibits 31.1–31.2 and the SPSS file confirm that Q31–Q34 run from 1 (Strongly disagree) to 5 (Strongly agree), with 3 = Uncertain. Raw Q37 runs from 1 (Excellent) to 5 (Very poor). The questionnaire calls code 6 “No opinion,” while the coding exhibit calls it “No answer.” The file has no observed code 6. The supplied Q37r reverses the substantive scale, so 1 = Very poor, 3 = Average, and 5 = Excellent. Q37r is a single item and the four predictors enter separately. The case narrative reports 125 returns with two excluded, while the assigned file contains 128 records. The course file determines the denominators.
+
+```{r}
+library(haven)
+library(knitr)
+filename <- "Case 31 Data_efcu_4.sav"
+paths <- c(file.path("data", filename), filename, file.path("~/Downloads", filename))
+path <- paths[file.exists(paths)][1]
+if (is.na(path)) stop("Place the authorized course SAV in the project data folder.")
+raw <- read_sav(path, user_na = TRUE)
+survey <- zap_missing(raw)
+predictors <- paste0("q", 31:34)
+items <- c("Q37_r", predictors)
+stopifnot(all(c("q37", items) %in% names(survey)))
+scores <- as.data.frame(lapply(survey[items], as.numeric))
+raw_rating <- as.numeric(survey$q37)
+expected <- ifelse(raw_rating %in% 1:5, 6 - raw_rating, NA_real_)
+stopifnot(identical(scores$Q37_r, expected),
+          all(vapply(scores, function(x) all(x %in% c(1:5, NA)), logical(1))))
+analysis <- scores[complete.cases(scores), ]
+kable(data.frame(Item = items, Valid = colSums(!is.na(scores)),
+  Missing = colSums(is.na(scores)), row.names = NULL))
+```
+
+Of `r nrow(scores)` course records, `r nrow(scores)-nrow(analysis)` lack an outcome score. All four predictors are complete. Descriptives, correlations, and the main regression use the same `r nrow(analysis)` complete records.
+
+## Research hypotheses
+
+- **H5a.** Member belief about CU keeps personal financial information confidential will positively influence the overall attitude toward credit union’s operational efficiency.
+- **H5b.** Loan application processing promptness will positively influence the overall attitude toward credit union’s operational efficiency.
+- **H5c.** Member satisfaction with level of financial services in meeting needs will positively influence the overall attitude toward credit union’s operational efficiency.
+- **H5d.** Loan application simplicity and easiness will positively influence the overall attitude toward credit union’s operational efficiency.
+
+## Analytical method
+
+The four hypotheses pair the same outcome with four different predictors. One additive linear regression estimates each predictor’s association with Q37r while holding the other three ratings constant and tests the slopes jointly. The key treats the five-point items as approximately metric. For each hypothesis, I require a positive slope and a two-sided p-value below .05. These are prespecified coefficient-level tests. The survey supports conditional associations.
+
+## Descriptive statistics
+
+```{r}
+#| label: tbl-descriptives
+#| tbl-cap: "Descriptive statistics for the complete-case model sample"
+meaning <- c("Overall management and operations", "Confidentiality",
+  "Processing promptness", "Services meet needs", "Application simplicity")
+descriptives <- t(vapply(analysis, function(x) {
+  c(N = length(x), Mean = mean(x), SD = sd(x), Min = min(x), Max = max(x))
+}, numeric(5)))
+kable(data.frame(Item = items, Measure = meaning, descriptives, row.names = NULL),
+  digits = 2)
+```
+
+## Preliminary Pearson correlations
+
+```{r}
+#| label: tbl-correlations
+#| tbl-cap: "Pearson correlations using the complete-case sample"
+correlations <- cor(analysis, method = "pearson")
+kable(correlations, digits = 3)
+```
+
+Processing promptness had the largest bivariate association with overall management and operations. The matrix describes pairwise linear associations on the numeric rating scales. The regression below adjusts for the other ratings.
+
+## Multiple regression model
+
+```{r}
+#| label: tbl-model
+#| tbl-cap: "Fit of the four-predictor model"
+model <- lm(Q37_r ~ q31 + q32 + q33 + q34, data = analysis, na.action = na.fail)
+fit <- summary(model)
+f <- fit$fstatistic
+fmt_p <- function(p) format.pval(p, digits = 3, eps = .000001)
+kable(data.frame(N = nobs(model), F = unname(f[1]), df1 = unname(f[2]),
+  df2 = unname(f[3]), p = fmt_p(pf(f[1], f[2], f[3], lower.tail = FALSE)),
+  R.squared = fit$r.squared, Adjusted.R.squared = fit$adj.r.squared,
+  Residual.SE = fit$sigma), digits = 3)
+```
+
+```{r}
+#| label: tbl-coefficients
+#| tbl-cap: "Conventional OLS estimates and 95% confidence intervals"
+est <- coef(fit)
+ci <- confint(model)
+beta <- coef(model)[predictors] * vapply(analysis[predictors], sd, numeric(1)) /
+  sd(analysis$Q37_r)
+terms_readable <- c("Intercept", paste(toupper(predictors), meaning[-1], sep = " · "))
+kable(data.frame(Term = terms_readable, B = est[, 1], SE = est[, 2],
+  t = est[, 3], p = fmt_p(est[, 4]), Lower = ci[, 1], Upper = ci[, 2],
+  Beta = c(NA, beta), row.names = NULL), digits = 3)
+```
+
+B is the adjusted change in expected Q37r points per one-point increase in a predictor. Standardized beta expresses the same slope in sample standard-deviation units. The intercept extrapolates to zero on all four predictor scales, outside their observed ranges.
+
+## Regression diagnostics
+
+```{r}
+#| label: fig-diagnostics
+#| fig-cap: "Residuals versus fitted values and normal Q–Q plot"
+#| fig-width: 8
+#| fig-height: 3.7
+old <- par(mfrow = c(1, 2), mar = c(4.2, 4.2, 2, 1))
+plot(model, which = 1, id.n = 0)
+plot(model, which = 2, id.n = 0)
+par(old)
+```
+
+Each row represents one respondent’s questionnaire. Independence is a study-design assumption, and clustering cannot be assessed from these fields. The residual plot displays banding expected from a bounded five-category outcome. The Q–Q plot shows lower-tail departures. The plots are useful for screening gross departures, with limited precision for detecting curvature on these short scales.
+
+```{r}
+#| label: tbl-diagnostics
+#| tbl-cap: "Collinearity and influence diagnostics"
+vif <- diag(solve(cor(analysis[predictors])))
+bp <- lmtest::bptest(model)
+cook <- cooks.distance(model)
+leverage <- hatvalues(model)
+student <- rstudent(model)
+screened <- cook > 4 / nobs(model)
+kable(data.frame(Predictor = toupper(names(vif)), VIF = as.numeric(vif)), digits = 3)
+kable(data.frame(BP = unname(bp$statistic), df = unname(bp$parameter),
+  BP.p = fmt_p(bp$p.value), Max.Cook.D = max(cook), Cook.over.4.by.N = sum(screened),
+  Max.leverage = max(leverage), Max.abs.studentized.residual = max(abs(student))),
+  digits = 3)
+```
+
+The studentized Breusch–Pagan check gives little evidence of nonconstant variance (p = `r fmt_p(bp$p.value)`). The VIFs show limited predictor overlap. Cook’s distance flags `r sum(screened)` records at the exploratory 4/N cutoff. The largest Cook’s D is `r round(max(cook), 3)`, and the largest absolute studentized residual is `r round(max(abs(student)), 2)`. All valid cases remain in the primary fit.
+
+```{r}
+#| label: tbl-sensitivity
+#| tbl-cap: "Sensitivity checks for the primary model’s four slopes"
+hc3 <- lmtest::coeftest(model, vcov. = sandwich::vcovHC(model, type = "HC3"))
+omit_one <- update(model, data = analysis[-which.max(cook), ])
+omit_est <- coef(summary(omit_one))
+kable(data.frame(Predictor = toupper(predictors), HC3.SE = hc3[predictors, 2],
+  HC3.p = fmt_p(hc3[predictors, 4]), Omit.max.Cook.B = omit_est[predictors, 1],
+  Omit.max.Cook.p = fmt_p(omit_est[predictors, 4]), row.names = NULL), digits = 3)
+```
+
+HC3 adjusts the standard errors of the same estimates as a sensitivity check. A separate diagnostic refit temporarily omits only the observation with the largest Cook’s D. Both checks preserve the slope directions and the .05 decisions. Hypothesis conclusions below use the full-sample conventional OLS results.
+
+## Hypothesis interpretations
+
+```{r}
+#| include: false
+finding <- function(term) {
+  interval <- ci[term, ]
+  sprintf("B = %.3f, p = %s, 95%% CI [%.3f, %.3f]", est[term, 1],
+    fmt_p(est[term, 4]), interval[1], interval[2])
+}
+```
+
+### H5a — Member belief about CU keeps personal financial information confidential will positively influence the overall attitude toward credit union’s operational efficiency.
+
+Holding the other three ratings constant, stronger belief in confidentiality was associated with a higher overall management and operations rating (`r finding("q31")`). The interval is above zero, supporting H5a at the coefficient-level .05 threshold.
+
+### H5b — Loan application processing promptness will positively influence the overall attitude toward credit union’s operational efficiency.
+
+Holding the other three ratings constant, stronger agreement that processing was prompt was associated with a higher overall rating (`r finding("q32")`). The interval is above zero, supporting H5b.
+
+### H5c — Member satisfaction with level of financial services in meeting needs will positively influence the overall attitude toward credit union’s operational efficiency.
+
+Holding the other three ratings constant, stronger agreement that services met members’ needs was associated with a higher overall rating (`r finding("q33")`). The interval is above zero, supporting H5c.
+
+### H5d — Loan application simplicity and easiness will positively influence the overall attitude toward credit union’s operational efficiency.
+
+Holding the other three ratings constant, the estimated association with simplicity was negative (`r finding("q34")`). Its interval includes zero. The available evidence does not support the proposed positive association.
+
+```{r}
+#| label: tbl-hypotheses
+#| tbl-cap: "Decisions from the same four-predictor OLS model"
+supported <- est[predictors, 1] > 0 & est[predictors, 4] < .05
+kable(data.frame(Hypothesis = paste0("H5", letters[1:4]), Predictor = meaning[-1],
+  Expected = "Positive", B = est[predictors, 1], Beta = beta,
+  p = fmt_p(est[predictors, 4]),
+  Conclusion = ifelse(supported, "Supported", "Insufficient evidence"),
+  row.names = NULL), digits = 3)
+```
+
+## Overall findings and insights
+
+The overall F-test supports an association between the predictor set and the overall rating. The model explains `r sprintf("%.1f%%", 100 * fit$r.squared)` of the observed rating variance. Adjusting for sample size and number of predictors yields `r sprintf("%.1f%%", 100 * fit$adj.r.squared)`. Prompt processing has the largest standardized adjusted association in this sample. This pattern identifies an area for interpreting member feedback. The single-item outcome and predictors are bounded ordinal ratings treated as approximately metric. The analysis is observational, reflects respondents with a valid overall rating, and has no out-of-sample validation.
+
+## Appendix
+
+To reproduce the analysis, obtain the instructor-provided SAV and place it in the project’s `data/` folder or next to the QMD. The code also checks the standard Downloads folder.
+
+### GitHub Repository
+
+[Case 31 repository](https://github.com/hanamai111/case31)
+
+### GitHub Pages
+
+[Published H5a–H5d report](https://hanamai111.github.io/case31/IC-Case31-H5a-H5d-Han-Mai.html)
